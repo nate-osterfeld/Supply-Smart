@@ -1,0 +1,6 @@
+@SupplySmart.Host_HostAddress = http://localhost:5032
+
+GET {{SupplySmart.Host_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

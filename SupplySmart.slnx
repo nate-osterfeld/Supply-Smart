@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SupplySmart.Domain/SupplySmart.Domain.csproj" />
+  <Project Path="SupplySmart.Host/SupplySmart.Host.csproj" />
+  <Project Path="SupplySmart.Integrations/SupplySmart.Integrations.csproj" />
+</Solution>
