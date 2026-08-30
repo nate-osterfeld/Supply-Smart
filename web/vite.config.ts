@@ -7,5 +7,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../SupplySmart.Host/wwwroot'),
     emptyOutDir: true,
-  }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://localhost:7091',
+        changeOrigin: true,
+        secure: false, // Disables SSL verification for local self-signed certificates
+      },
+    },
+  },
 })
