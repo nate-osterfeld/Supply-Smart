@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SupplySmart.Domain\SupplySmart.Domain.csproj" />
+    <ProjectReference Include="..\SupplySmart.Integrations\SupplySmart.Integrations.csproj" />
   </ItemGroup>
 
 </Project>
