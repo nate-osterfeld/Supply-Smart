@@ -1,0 +1,53 @@
+name: Deploy Dev Environment
+
+on:
+  push:
+    # Runs on main and feature branches
+    branches:
+      - '**'
+      - '!staging'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
+
+      # Dynamically creates appsettings.secrets.json file on the fly for the build
+      - name: Create appsettings.secrets File
+        run: |
+          echo "{
+            \"connectionstrings\": {
+              \"_msg\": \"add any necessary connection string names here, put the strings themselves in appsettings.secrets.json\",
+              \"supplysmart-db\": \"${{ secrets.AZURE_SQL_CONNECTION_STRING_DEV }}\",
+            }
+          }" > SupplySmart.Host/appsettings.secrets.json
+
+      - name: Log in to ACR via Azure CLI
+        run: | 
+          az acr login --name supplysmartACR
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: supplysmartacr.azurecr.io/supplysmart-app:dev-${{ github.sha }}
+
+      - name: Deploy to Azure Container App
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          containerAppName: supplysmart-dev
+          resourceGroup: rg-supplysmart
+          imageToDeploy: supplysmartacr.azurecr.io/supplysmart-app:dev-${{ github.sha }}
+          acrName: supplysmartacr
+          acrUsername: supplysmartacr
+          acrPassword: ${{ secrets.ACR_PASSWORD }}
+          containerAppEnvironment: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
