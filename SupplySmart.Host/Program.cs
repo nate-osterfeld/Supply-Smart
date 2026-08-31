@@ -7,9 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddOpenApi();
 
+// Load secrets file
+builder.Configuration.AddJsonFile("appsettings.secrets.json", optional: true, reloadOnChange: true);
+
 // Register Entity Framework Core with SQL Server using your custom DbContext name
 builder.Services.AddDbContext<SupplySmartDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("supplysmart-db")));
 
 var app = builder.Build();
 
