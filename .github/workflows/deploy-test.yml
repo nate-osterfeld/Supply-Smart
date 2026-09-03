@@ -1,6 +1,7 @@
 name: Deploy Test Environment
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - staging
@@ -8,6 +9,9 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: test
+      url: ${{ steps.get_url.outputs.app_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,4 +51,14 @@ jobs:
           acrName: supplysmartacr
           acrUsername: supplysmartacr
           acrPassword: ${{ secrets.ACR_PASSWORD }}
-          environmentName: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
+          containerAppEnvironment: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
+
+      - name: Get Deployment URL
+        id: get_url
+        run: |
+          FQDN=$(az containerapp show \
+            --name supplysmart-test \
+            --resource-group rg-supplysmart \
+            --query properties.configuration.ingress.fqdn \
+            -o tsv)
+          echo "app_url=https://$FQDN" >> $GITHUB_OUTPUT

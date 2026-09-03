@@ -1,12 +1,16 @@
 name: Deploy Production Environment
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: prod
+      url: ${{ steps.get_url.outputs.app_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,15 +39,25 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: supplysmartacr.azurecr.io/supplysmart-app:${{ github.sha }}
+          tags: supplysmartacr.azurecr.io/supplysmart-app:prod-${{ github.sha }}
 
       - name: Deploy to Azure Container App
         uses: azure/container-apps-deploy-action@v2
         with:
           containerAppName: supplysmart-prod
           resourceGroup: rg-supplysmart
-          imageToDeploy: supplysmartacr.azurecr.io/supplysmart-app:${{ github.sha }}
+          imageToDeploy: supplysmartacr.azurecr.io/supplysmart-app:prod-${{ github.sha }}
           acrName: supplysmartacr
           acrUsername: supplysmartacr
           acrPassword: ${{ secrets.ACR_PASSWORD }}
-          environmentName: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
+          containerAppEnvironment: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
+
+      - name: Get Deployment URL
+        id: get_url
+        run: |
+          FQDN=$(az containerapp show \
+            --name supplysmart-prod \
+            --resource-group rg-supplysmart \
+            --query properties.configuration.ingress.fqdn \
+            -o tsv)
+          echo "app_url=https://$FQDN" >> $GITHUB_OUTPUT
