@@ -1,5 +1,5 @@
 using SupplySmart.Integrations.DbContexts;
-using SupplySmart.Endpoints.Configuration;
+//using SupplySmart.Endpoints.Configuration;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +29,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // Map modular inventory endpoints
-app.MapSupplyEndpoints();
+//app.MapSupplyEndpoints();
 
 // Fallback routing for React Single Page Application (SPA) client-side routing
 app.MapFallbackToFile("index.html");
