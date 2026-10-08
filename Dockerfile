@@ -54,7 +54,7 @@ COPY --from=backend-build /app/publish .
 
 # Copy built React frontend static assets from Stage 1 directly into the backend's wwwroot folder
 # This creates a unified monolith container where C# serves both the API and the React SPA.
-COPY --from=frontend-build /app/SupplySmart.Host/wwwroot ./wwwroot
+COPY --from=frontend-build /app/web/dist ./wwwroot
 
 # Set the container's entry point executable to run the C# Web Host
 ENTRYPOINT ["dotnet", "SupplySmart.Host.dll"]
