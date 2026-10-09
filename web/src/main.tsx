@@ -6,6 +6,7 @@ import RequireAuth from './components/protected/RequireAuth';
 import './index.css';
 
 import AuthPage from './pages/auth/AuthPage';
+import App from './App';
 
 // Initialize TanStack Query Client
 const queryClient = new QueryClient({
@@ -29,16 +30,9 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/dashboard',
-        element: (
-          <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold">Welcome to SupplySmart Dashboard</h1>
-              <p className="mt-2 text-sm text-slate-500">Workspace successfully unlocked!</p>
-            </div>
-          </div>
-        ),
+        element: <App />,
       },
-      // Future protected routes (like inventory, catalog, settings) go here!
+      // Future protected routes go here!
     ],
   },
 ]);
