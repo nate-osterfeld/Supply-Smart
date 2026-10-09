@@ -5,3 +5,6 @@ export * from './LocationDto.ts';
 export * from './AuditLogEntryDto.ts';
 export * from './DashboardMetricsDto.ts';
 export * from './ProcedureForecastSummaryDto.ts';
+export * from './ContainerDto.ts';
+export * from './InventoryItemDto.ts';
+export * from './RoomDto.ts';
