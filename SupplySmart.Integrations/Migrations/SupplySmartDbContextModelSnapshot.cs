@@ -22,6 +22,160 @@ namespace SupplySmart.Integrations.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ItemDetails")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LocationName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("AuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Container", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ParentContainerId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RoomId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("ParentContainerId");
+
+                    b.HasIndex("RoomId");
+
+                    b.ToTable("Containers", (string)null);
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventoryItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ContainerId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ExpirationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRestockPending")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LotNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("MinimumThreshold")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("InventoryItems", (string)null);
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Location", b =>
                 {
                     b.Property<int>("Id")
@@ -94,6 +248,43 @@ namespace SupplySmart.Integrations.Migrations
                     b.ToTable("Organizations", (string)null);
                 });
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Room", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("Rooms", (string)null);
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.User", b =>
                 {
                     b.Property<int>("Id")
@@ -148,6 +339,62 @@ namespace SupplySmart.Integrations.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.AuditLog", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany("AuditLogs")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Container", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany("Containers")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Container", "ParentContainer")
+                        .WithMany("SubContainers")
+                        .HasForeignKey("ParentContainerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Room", "Room")
+                        .WithMany("Containers")
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("ParentContainer");
+
+                    b.Navigation("Room");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventoryItem", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Container", "Container")
+                        .WithMany("InventoryItems")
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany("InventoryItems")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Container");
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Location", b =>
                 {
                     b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
@@ -155,6 +402,25 @@ namespace SupplySmart.Integrations.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Room", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Location", "Location")
+                        .WithMany("Rooms")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany("Rooms")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Location");
 
                     b.Navigation("Organization");
                 });
@@ -170,11 +436,36 @@ namespace SupplySmart.Integrations.Migrations
                     b.Navigation("Organization");
                 });
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Container", b =>
+                {
+                    b.Navigation("InventoryItems");
+
+                    b.Navigation("SubContainers");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Location", b =>
+                {
+                    b.Navigation("Rooms");
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Organization", b =>
                 {
+                    b.Navigation("AuditLogs");
+
+                    b.Navigation("Containers");
+
+                    b.Navigation("InventoryItems");
+
                     b.Navigation("Locations");
 
+                    b.Navigation("Rooms");
+
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Room", b =>
+                {
+                    b.Navigation("Containers");
                 });
 #pragma warning restore 612, 618
         }
