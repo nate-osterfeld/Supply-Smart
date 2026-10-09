@@ -14,10 +14,13 @@ namespace SupplySmart.Integrations.DbContexts
     public sealed class SupplySmartDbContext : DbContext
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
-
-        public DbSet<Organization> Organizations => Set<Organization>();
-        public DbSet<User> Users => Set<User>();
-        public DbSet<Location> Locations => Set<Location>();
+        public DbSet<Organization> Organizations { get; set; }
+        public DbSet<User> Users { get; set; }
+        public DbSet<Location> Locations { get; set; }
+        public DbSet<Room> Rooms { get; set; }
+        public DbSet<Container> Containers { get; set; }
+        public DbSet<InventoryItem> InventoryItems { get; set; }
+        public DbSet<AuditLog> AuditLogs {  get; set; }
 
         public SupplySmartDbContext(DbContextOptions<SupplySmartDbContext> options) : base(options)
         {
@@ -80,6 +83,89 @@ namespace SupplySmart.Integrations.DbContexts
                       .WithMany(o => o.Locations)
                       .HasForeignKey(e => e.OrganizationId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Room>(entity =>
+            {
+                entity.ToTable("Rooms");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Kind).HasMaxLength(50);
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany(o => o.Rooms)
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Location)
+                      .WithMany(l => l.Rooms)
+                      .HasForeignKey(e => e.LocationId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Container>(entity =>
+            {
+                entity.ToTable("Containers");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Kind).HasMaxLength(50);
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany(o => o.Containers)
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Room)
+                      .WithMany(r => r.Containers)
+                      .HasForeignKey(e => e.RoomId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Self-referencing relationship for infinite nesting (Cabinet -> Shelf -> Bin)
+                entity.HasOne(e => e.ParentContainer)
+                      .WithMany(c => c.SubContainers)
+                      .HasForeignKey(e => e.ParentContainerId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<InventoryItem>(entity =>
+            {
+                entity.ToTable("InventoryItems");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(250);
+                entity.Property(e => e.Sku).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.UnitCost).HasColumnType("decimal(18,2)");
+                
+                entity.Property(e => e.Type)
+                    .HasConversion<string>()
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany(o => o.InventoryItems)
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Container)
+                      .WithMany(c => c.InventoryItems)
+                      .HasForeignKey(e => e.ContainerId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AuditLog>(entity =>
+            {
+                entity.ToTable("AuditLogs");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.UserEmail).IsRequired().HasMaxLength(256);
+                entity.Property(e => e.ActionType).HasMaxLength(50);
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany(o => o.AuditLogs)
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
 

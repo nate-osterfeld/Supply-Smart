@@ -17,4 +17,5 @@ public class Location : IEntityBase
     public DateTime CreatedDateUtc { get; set; } = DateTime.UtcNow;
     public string LastUpdatedBy { get; set; } = string.Empty;
     public DateTime LastUpdatedDateUtc { get; set; } = DateTime.UtcNow;
+    public List<Room> Rooms { get; set; } = new List<Room>();
 }
