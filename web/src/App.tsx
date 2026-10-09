@@ -15,6 +15,7 @@ import {
 
 import AuthPage from './pages/auth/AuthPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
+import StoragePage from './pages/storage/StoragePage';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
@@ -171,6 +172,7 @@ export default function App() {
         {/* Dynamic Screen Viewport */}
         <main className="flex-1 overflow-y-auto bg-[#f7f8fa] p-8">
           {currentScreen === 'dashboard' && <DashboardPage onNavigate={navigateTo} />}
+          {currentScreen === 'storage' && <StoragePage />}
         </main>
       </div>
     </div>
