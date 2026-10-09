@@ -12,6 +12,8 @@ export function useAuth() {
             localStorage.setItem('supplysmart_token', data.token);
             localStorage.setItem('supplysmart_org_id', data.organizationId.toString());
             localStorage.setItem('supplysmart_role', data.role);
+            localStorage.setItem('supplysmart_email', data.email);
+            localStorage.setItem('supplysmart_name', data.fullName);
             queryClient.invalidateQueries({ queryKey: ['locations'] });
         },
     });
@@ -22,6 +24,8 @@ export function useAuth() {
             localStorage.setItem('supplysmart_token', data.token);
             localStorage.setItem('supplysmart_org_id', data.organizationId.toString());
             localStorage.setItem('supplysmart_role', data.role);
+            localStorage.setItem('supplysmart_email', data.email);
+            localStorage.setItem('supplysmart_name', data.fullName);
             queryClient.invalidateQueries({ queryKey: ['locations'] });
         },
     });
