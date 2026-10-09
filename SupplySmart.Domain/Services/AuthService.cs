@@ -4,13 +4,9 @@ using Microsoft.IdentityModel.Tokens;
 using SupplySmart.Integrations.Models.Data;
 using SupplySmart.Integrations.Models.DTO;
 using SupplySmart.Integrations.Repositories;
-using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace SupplySmart.Domain.Services
 {
@@ -26,6 +22,7 @@ namespace SupplySmart.Domain.Services
         private readonly IBaseRepository<Organization> _orgRepo;
         private readonly IBaseRepository<User> _userRepo;
         private readonly IBaseRepository<Location> _locationRepo;
+        private readonly ITenantSeederService _tenantSeederService;
         private readonly IConfiguration _configuration;
         private readonly IPasswordHasher<User> _passwordHasher = new PasswordHasher<User>();
 
@@ -33,11 +30,13 @@ namespace SupplySmart.Domain.Services
             IBaseRepository<Organization> orgRepo,
             IBaseRepository<User> userRepo,
             IBaseRepository<Location> locationRepo,
+            ITenantSeederService tenantSeederService,
             IConfiguration configuration)
         {
             _orgRepo = orgRepo;
             _userRepo = userRepo;
             _locationRepo = locationRepo;
+            _tenantSeederService = tenantSeederService;
             _configuration = configuration;
         }
 
@@ -73,12 +72,16 @@ namespace SupplySmart.Domain.Services
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
             await _userRepo.AddAsync(user);
 
-            // 4. Generate JWT Token
+            // 4. Automatically Seed Starter Inventory, Rooms, and Audit Logs
+            await _tenantSeederService.SeedInitialTenantDataAsync(organization.Id, defaultLocation.Id, user.Email, user.FullName);
+
+            // 5. Generate JWT Token
             var token = GenerateJwtToken(user, organization.Id);
             return new AuthResponseDto
             {
                 Token = token,
                 Email = user.Email,
+                FullName = user.FullName,
                 Role = user.Role.ToString(),
                 OrganizationId = organization.Id,
                 Locations = new List<LocationDto>
@@ -116,6 +119,7 @@ namespace SupplySmart.Domain.Services
             {
                 Token = token,
                 Email = user.Email,
+                FullName = user.FullName,
                 Role = user.Role.ToString(),
                 OrganizationId = user.OrganizationId,
                 Locations = locationDtos
@@ -143,6 +147,7 @@ namespace SupplySmart.Domain.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email),
+                new Claim(ClaimTypes.Name, user.FullName),
                 new Claim(ClaimTypes.Role, user.Role.ToString()),
                 new Claim("OrganizationId", organizationId.ToString()),
                 new Claim(JwtRegisteredClaimNames.GivenName, user.FullName)

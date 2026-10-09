@@ -1,5 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SupplySmart.Domain.Services;
 using SupplySmart.Endpoints.Configuration;
@@ -23,6 +23,8 @@ builder.Services.AddDbContext<SupplySmartDbContext>(options =>
 // Register repositories & services for dependency injection
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(SupplySmartRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ITenantSeederService, TenantSeederService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddHttpContextAccessor(); // Required for automatic audit logging timestamps
 
 // Configure JWT settings
@@ -67,6 +69,7 @@ app.UseStaticFiles();
 
 // Map API endpoints
 app.MapAuthEndpoints();
+app.MapDashboardEndpoints();
 
 // Fallback routing for React Single Page Application (SPA) client-side routing
 app.MapFallbackToFile("index.html");
