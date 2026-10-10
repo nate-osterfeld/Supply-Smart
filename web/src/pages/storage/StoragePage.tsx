@@ -9,6 +9,7 @@ import {
   ShieldCheck, 
   AlertTriangle,
   ClipboardList,
+  ArrowLeft,
 } from 'lucide-react';
 import { useStorage } from '../../hooks/useStorage';
 
@@ -18,8 +19,15 @@ export default function StoragePage() {
   const [viewLevel, setViewLevel] = useState<ViewLevel>('locations');
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
-  const [selectedContainerId, setSelectedContainerId] = useState<number | undefined>(undefined);
-  const [selectedContainerName, setSelectedContainerName] = useState<string>('Select a container');
+  
+  // Hierarchy drill-down states for containers
+  const [containerPathStack, setContainerPathStack] = useState<{ id: number; name: string }[]>([]);
+  const currentParentContainerId = containerPathStack.length > 0 ? containerPathStack[containerPathStack.length - 1].id : null;
+  const currentContainerName = containerPathStack.length > 0 ? containerPathStack[containerPathStack.length - 1].name : 'Select a container';
+
+  // The actual container ID used to fetch items is the deepest selected container in the stack
+  const selectedContainerId = currentParentContainerId ?? undefined;
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const { locations, isLoadingLocations, items, isLoadingItems } = useStorage(selectedContainerId);
@@ -48,19 +56,27 @@ export default function StoragePage() {
       title: 'Inventory health', 
       value: isHealthGood ? 'Good' : 'Needs Review', 
       detail: `${healthPercentage}% of items are within safe levels`, 
-      Icon: isHealthGood ? ShieldCheck : AlertTriangle, // Dynamic icon toggle!
+      Icon: isHealthGood ? ShieldCheck : AlertTriangle,
       iconColor: isHealthGood ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/50 dark:text-blue-400' : 'text-amber-600 bg-amber-50 dark:bg-amber-950/50 dark:text-amber-400',
       showProgress: false 
     },
     { 
       title: 'Last cycle count', 
       value: 'Today', 
-      detail: 'Counted by (name)', 
+      detail: 'Counted by staff', 
       Icon: ClipboardList, 
       showProgress: false,
       iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-950/50 dark:text-blue-400'
     }
   ];
+
+  // Helper containers calculation for footer display logic
+  const allContainers = activeRoom?.containers || [];
+  const displayedContainers = allContainers.filter(c => 
+    currentParentContainerId === null 
+      ? c.parentContainerId === null || c.parentContainerId === undefined
+      : c.parentContainerId === currentParentContainerId
+  );
 
   // Determine what list to show on the left panel based on drill-down level
   const renderLeftPanelContent = () => {
@@ -68,107 +84,138 @@ export default function StoragePage() {
       return <p className="p-4 text-xs text-slate-400">Loading facility hierarchy...</p>;
     }
 
-    if (viewLevel === 'locations') {
-      if (locations.length === 0) return <p className="p-4 text-xs text-slate-400">No locations found.</p>;
-      
-      return locations.map((loc) => (
-        <button 
-          key={loc.id} 
-          onClick={() => {
-            setSelectedLocationId(loc.id);
-            setViewLevel('rooms');
-          }} 
-          className="group mb-1 flex w-full items-start gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50"
-        >
-          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            <Folder className="size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-200">{loc.name}</p>
-              <ChevronRight className="size-4 text-slate-400" />
-            </div>
-            <p className="mt-1 truncate text-[11px] text-slate-400">{loc.rooms?.length || 0} rooms registered</p>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{loc.isPrimary ? 'Primary Facility' : 'Branch'}</span>
-            </div>
-          </div>
-        </button>
-      ));
-    }
-
-    if (viewLevel === 'rooms') {
-      const rooms = activeLocation?.rooms || [];
-      if (rooms.length === 0) return <p className="p-4 text-xs text-slate-400">No rooms found in this location.</p>;
-
-      return rooms.map((room) => (
-        <button 
-          key={room.id} 
-          onClick={() => {
-            setSelectedRoomId(room.id);
-            setViewLevel('containers');
-          }} 
-          className="group mb-1 flex w-full items-start gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50"
-        >
-          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            <Folder className="size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-200">{room.name}</p>
-              <ChevronRight className="size-4 text-slate-400" />
-            </div>
-            <p className="mt-1 truncate text-[11px] text-slate-400">{room.containers?.length || 0} storage units inside</p>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Room</span>
-            </div>
-          </div>
-        </button>
-      ));
-    }
-
-    if (viewLevel === 'containers') {
-      const containers = activeRoom?.containers || [];
-      if (containers.length === 0) return <p className="p-4 text-xs text-slate-400">No storage units/bins found in this room.</p>;
-
-      return containers.map((container) => {
-        const isSelected = selectedContainerId === container.id;
-        return (
-          <button 
-            key={container.id} 
+    return (
+      <div>
+        {/* Unified Step-by-Step Back Button */}
+        {viewLevel !== 'locations' && (
+          <button
             onClick={() => {
-              setSelectedContainerId(container.id);
-              setSelectedContainerName(container.name);
-            }} 
-            className={`group mb-1 flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${
-              isSelected 
-                ? 'border-blue-200 bg-blue-50/70 shadow-2xs dark:border-blue-900 dark:bg-blue-950/40' 
-                : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50'
-            }`}
+              if (viewLevel === 'containers') {
+                if (containerPathStack.length > 0) {
+                  setContainerPathStack(prev => prev.slice(0, prev.length - 1));
+                } else {
+                  setViewLevel('rooms');
+                  setSelectedRoomId(null);
+                }
+              } else if (viewLevel === 'rooms') {
+                setViewLevel('locations');
+                setSelectedLocationId(null);
+              }
+            }}
+            className="mb-3 flex w-full items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           >
-            <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${
-              isSelected ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-            }`}>
-              <Package className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className={`truncate text-[13px] font-semibold ${isSelected ? 'text-blue-950 dark:text-blue-200' : 'text-slate-800 dark:text-slate-200'}`}>
-                  {container.name}
-                </p>
-                <ChevronRight className="size-4 text-slate-400" />
-              </div>
-              <p className="mt-1 truncate text-[11px] text-slate-400">{activeRoom?.name} · {activeLocation?.name}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{container.kind}</span>
-                <span className="size-1 rounded-full bg-slate-300" />
-                <span className="text-[10px] text-slate-500">Storage Unit</span>
-              </div>
-            </div>
+            <ArrowLeft className="size-3.5" /> 
+                Back
           </button>
-        );
-      });
-    }
+        )}
+
+        {viewLevel === 'locations' && (
+          locations.length === 0 ? <p className="p-4 text-xs text-slate-400">No locations found.</p> :
+          locations.map((loc) => (
+            <button 
+              key={loc.id} 
+              onClick={() => {
+                setSelectedLocationId(loc.id);
+                setViewLevel('rooms');
+              }} 
+              className="group mb-1 flex w-full items-start gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50"
+            >
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <Folder className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-200">{loc.name}</p>
+                  <ChevronRight className="size-4 text-slate-400" />
+                </div>
+                <p className="mt-1 truncate text-[11px] text-slate-400">{loc.rooms?.length || 0} rooms registered</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{loc.isPrimary ? 'Primary Facility' : 'Branch'}</span>
+                </div>
+              </div>
+            </button>
+          ))
+        )}
+
+        {viewLevel === 'rooms' && (
+          (activeLocation?.rooms || []).length === 0 ? <p className="p-4 text-xs text-slate-400">No rooms found in this location.</p> :
+          (activeLocation?.rooms || []).map((room) => (
+            <button 
+              key={room.id} 
+              onClick={() => {
+                setSelectedRoomId(room.id);
+                setContainerPathStack([]); 
+                setViewLevel('containers');
+              }} 
+              className="group mb-1 flex w-full items-start gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50"
+            >
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <Folder className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-200">{room.name}</p>
+                  <ChevronRight className="size-4 text-slate-400" />
+                </div>
+                <p className="mt-1 truncate text-[11px] text-slate-400">{room.containers?.length || 0} storage units inside</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Room</span>
+                </div>
+              </div>
+            </button>
+          ))
+        )}
+
+        {viewLevel === 'containers' && (
+          displayedContainers.length === 0 ? (
+            <p className="p-4 text-xs text-slate-400"></p>
+          ) : (
+            displayedContainers.map((container) => {
+              const isSelected = selectedContainerId === container.id;
+              const hasChildren = allContainers.some(c => c.parentContainerId === container.id);
+
+              return (
+                <button 
+                  key={container.id} 
+                  onClick={() => {
+                    if (hasChildren) {
+                        setContainerPathStack(prev => [...prev, { id: container.id, name: container.name }]);
+                    } else {
+                        setContainerPathStack(prev => [...prev, { id: container.id, name: container.name }]);
+                    }
+                    }}
+                  className={`group mb-1 flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${
+                    isSelected 
+                      ? 'border-blue-200 bg-blue-50/70 shadow-2xs dark:border-blue-900 dark:bg-blue-950/40' 
+                      : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${
+                    isSelected ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                  }`}>
+                    <Package className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`truncate text-[13px] font-semibold ${isSelected ? 'text-blue-950 dark:text-blue-200' : 'text-slate-800 dark:text-slate-200'}`}>
+                        {container.name}
+                      </p>
+                      <ChevronRight className="size-4 text-slate-400" />
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-slate-400">{activeRoom?.name} · {activeLocation?.name}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{container.kind}</span>
+                      <span className="size-1 rounded-full bg-slate-300" />
+                      <span className="text-[10px] text-slate-500">{hasChildren ? 'Drill down' : 'Storage Bin'}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )
+        )}
+      </div>
+    );
   };
 
   return (
@@ -179,7 +226,7 @@ export default function StoragePage() {
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-xs text-slate-400">
               <button 
-                onClick={() => { setViewLevel('locations'); setSelectedLocationId(null); setSelectedRoomId(null); setSelectedContainerId(undefined); }}
+                onClick={() => { setViewLevel('locations'); setSelectedLocationId(null); setSelectedRoomId(null); setContainerPathStack([]); }}
                 className="hover:text-blue-600 transition-colors"
               >
                 Locations
@@ -189,7 +236,7 @@ export default function StoragePage() {
                 <>
                   <ChevronRight className="size-3 text-slate-300" />
                   <button 
-                    onClick={() => { setViewLevel('rooms'); setSelectedRoomId(null); setSelectedContainerId(undefined); }}
+                    onClick={() => { setViewLevel('rooms'); setSelectedRoomId(null); setContainerPathStack([]); }}
                     className="hover:text-blue-600 transition-colors font-medium text-slate-700 dark:text-slate-300"
                   >
                     {activeLocation.name}
@@ -201,7 +248,7 @@ export default function StoragePage() {
                 <>
                   <ChevronRight className="size-3 text-slate-300" />
                   <button 
-                    onClick={() => { setViewLevel('containers'); setSelectedContainerId(undefined); }}
+                    onClick={() => { setViewLevel('containers'); setContainerPathStack([]); }}
                     className="hover:text-blue-600 transition-colors font-semibold text-blue-700 dark:text-blue-400"
                   >
                     {activeRoom.name}
@@ -209,14 +256,19 @@ export default function StoragePage() {
                 </>
               )}
 
-              {selectedContainerId && selectedContainerName !== 'Select a container' && (
-                <>
+              {containerPathStack.map((pathNode, idx) => (
+                <span key={pathNode.id} className="flex items-center gap-1.5">
                   <ChevronRight className="size-3 text-slate-300" />
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {selectedContainerName}
-                  </span>
-                </>
-              )}
+                  <button
+                    onClick={() => {
+                      setContainerPathStack(containerPathStack.slice(0, idx + 1));
+                    }}
+                    className={`hover:text-blue-600 transition-colors ${idx === containerPathStack.length - 1 ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600'}`}
+                  >
+                    {pathNode.name}
+                  </button>
+                </span>
+              ))}
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Storage Hierarchy</h1>
             <p className="mt-1 text-sm text-slate-500">Navigate your physical inventory by location and storage compartment.</p>
@@ -231,7 +283,7 @@ export default function StoragePage() {
           </div>
         </div>
 
-        {/* Current Location Context Bar with Clickable Path & Back Button */}
+        {/* Current Location Context Bar with Clickable Path */}
         <div className="mb-5 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center gap-2 overflow-x-auto">
             <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -240,7 +292,7 @@ export default function StoragePage() {
             <span className="text-slate-300">|</span>
             
             <button 
-              onClick={() => { setViewLevel('locations'); setSelectedLocationId(null); setSelectedRoomId(null); setSelectedContainerId(undefined); }}
+              onClick={() => { setViewLevel('locations'); setSelectedLocationId(null); setSelectedRoomId(null); setContainerPathStack([]); }}
               className="text-xs hover:text-blue-600 text-slate-600 dark:text-slate-400 transition-colors"
             >
               Locations
@@ -250,7 +302,7 @@ export default function StoragePage() {
               <>
                 <span className="text-slate-300">›</span>
                 <button 
-                  onClick={() => { setViewLevel('rooms'); setSelectedRoomId(null); setSelectedContainerId(undefined); }}
+                  onClick={() => { setViewLevel('rooms'); setSelectedRoomId(null); setContainerPathStack([]); }}
                   className="text-xs hover:text-blue-600 font-semibold text-slate-700 dark:text-slate-300 transition-colors"
                 >
                   {activeLocation.name}
@@ -262,7 +314,7 @@ export default function StoragePage() {
               <>
                 <span className="text-slate-300">›</span>
                 <button 
-                  onClick={() => { setViewLevel('containers'); setSelectedContainerId(undefined); }}
+                  onClick={() => { setViewLevel('containers'); setContainerPathStack([]); }}
                   className="text-xs hover:text-blue-600 font-semibold text-slate-700 dark:text-slate-300 transition-colors"
                 >
                   {activeRoom.name}
@@ -270,14 +322,14 @@ export default function StoragePage() {
               </>
             )}
 
-            {selectedContainerId && selectedContainerName !== 'Select a container' && (
-              <>
+            {containerPathStack.map((pathNode, idx) => (
+              <span key={pathNode.id} className="flex items-center gap-1.5">
                 <span className="text-slate-300">›</span>
-                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                  {selectedContainerName}
+                <span className={`text-xs ${idx === containerPathStack.length - 1 ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-600'}`}>
+                  {pathNode.name}
                 </span>
-              </>
-            )}
+              </span>
+            ))}
           </div>
         </div>
 
@@ -299,8 +351,12 @@ export default function StoragePage() {
             <div className="p-3 max-h-[500px] overflow-y-auto">
               {renderLeftPanelContent()}
             </div>
+            
+            {/* Conditional Footer Text */}
             <div className="border-t border-slate-100 px-5 py-3 text-[11px] text-slate-400 dark:border-slate-800">
-              {viewLevel === 'containers' ? 'Select a storage container to view bin items' : 'Select an item to enter level'}
+              {viewLevel === 'locations' ? 'Select a location to enter rooms' :
+               viewLevel === 'rooms' ? 'Select a room to view storage units' :
+               displayedContainers.length > 0 ? 'Select a storage container to view bin items' : ''}
             </div>
           </section>
 
@@ -310,7 +366,7 @@ export default function StoragePage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Contents in {selectedContainerName}
+                    Contents in {currentContainerName}
                   </h2>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                     {items.length} items
@@ -402,7 +458,7 @@ export default function StoragePage() {
         </div>
       </main>
 
-      {/* Add Location Modal */}
+      {/* Add Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
@@ -427,7 +483,7 @@ export default function StoragePage() {
                 onClick={() => setIsAddModalOpen(false)}
                 className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700"
               >
-                Save Location
+                Save Unit
               </button>
             </div>
           </div>
