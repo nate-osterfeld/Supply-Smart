@@ -9,5 +9,6 @@
         public string ExpirationDate { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public string Status { get; set; } = string.Empty;
+        public int Type { get; set; } // (0 = Consumable, 1 = Reusable)
     }
 }

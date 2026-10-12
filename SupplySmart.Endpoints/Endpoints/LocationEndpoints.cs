@@ -55,5 +55,95 @@ namespace SupplySmart.Endpoints.Endpoints
                 return TypedResults.Problem("An unexpected error occurred.");
             }
         }
+
+        public static async Task<Results<Ok<RoomDto>, UnauthorizedHttpResult, BadRequest<string>, ProblemHttpResult>> CreateRoom(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int locationId,
+            [Microsoft.AspNetCore.Mvc.FromBody] CreateRoomDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+
+                var room = await locationService.CreateRoomAsync(orgId, locationId, dto.Name);
+                return TypedResults.Ok(room);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error creating room.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok<ContainerDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateContainer(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int roomId,
+            [Microsoft.AspNetCore.Mvc.FromBody] CreateContainerDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+
+                var container = await locationService.CreateContainerAsync(orgId, roomId, dto.Name, dto.Kind, dto.ParentContainerId);
+                return TypedResults.Ok(container);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error creating container.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok<InventoryItemDto>, UnauthorizedHttpResult, ProblemHttpResult>> AddItem(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int containerId,
+            [Microsoft.AspNetCore.Mvc.FromBody] CreateItemDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+                var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+
+                var item = await locationService.AddItemAsync(orgId, containerId, dto, userEmail);
+                return TypedResults.Ok(item);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error adding item.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> MoveItem(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int itemId,
+            [Microsoft.AspNetCore.Mvc.FromBody] MoveItemDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+                var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+
+                var success = await locationService.MoveItemAsync(orgId, itemId, dto.TargetContainerId, dto.Quantity, dto.MinimumThreshold, userEmail);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error relocating item.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
     }
 }
