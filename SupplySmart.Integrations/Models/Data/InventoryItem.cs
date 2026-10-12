@@ -27,7 +27,7 @@ public class InventoryItem
     public int Quantity { get; set; }
     public int MinimumThreshold { get; set; }
     public decimal UnitCost { get; set; }
-    public DateTime ExpirationDate { get; set; }
+    public DateTime? ExpirationDate { get; set; }
     public string Status { get; set; } = "Safe"; // Safe, Expiring Soon, Low Stock
     public bool IsRestockPending { get; set; }
 }

@@ -126,7 +126,7 @@ namespace SupplySmart.Integrations.Migrations
                     b.Property<int>("ContainerId")
                         .HasColumnType("int");
 
-                    b.Property<DateTime>("ExpirationDate")
+                    b.Property<DateTime?>("ExpirationDate")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsRestockPending")
