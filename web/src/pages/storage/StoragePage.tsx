@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { 
   Folder, 
   Package, 
+  MapPin,
   SlidersHorizontal, 
   Plus, 
   ChevronRight, 
@@ -130,7 +131,8 @@ export default function StoragePage() {
   const safeItemsCount = items.filter(i => i.status === 'Safe').length;
   const healthPercentage = totalItemsCount > 0 ? Math.round((safeItemsCount / totalItemsCount) * 100) : 100;
   const isHealthGood = healthPercentage >= 80;
-  const capacityPercentage = Math.min(100, totalItemsCount * 10);
+  const capacityPercentage = Math.round((totalItemsCount / 20) * 100);
+  // const capacityPercentage = Math.min(100, totalItemsCount * 10);
 
   const summaryCards = [
     { title: 'Location capacity', value: `${capacityPercentage}%`, detail: `${totalItemsCount} of 20 slots occupied`, Icon: Folder, showProgress: true, progressVal: capacityPercentage },
@@ -234,22 +236,60 @@ export default function StoragePage() {
       <main className="mx-auto max-w-[1400px]">
         {/* Header & Breadcrumbs */}
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <div className="mb-2 flex items-center gap-1.5 text-xs text-slate-400">
-              <button onClick={() => { setViewLevel('locations'); setSelectedLocationId(null); setSelectedRoomId(null); setContainerPathStack([]); }} className="hover:text-blue-600 transition-colors">Locations</button>
-              {activeLocation && <><ChevronRight className="size-3 text-slate-300" /><button onClick={() => { setViewLevel('rooms'); setSelectedRoomId(null); setContainerPathStack([]); }} className="hover:text-blue-600 font-medium text-slate-700 dark:text-slate-300">{activeLocation.name}</button></>}
-              {activeRoom && <><ChevronRight className="size-3 text-slate-300" /><button onClick={() => { setViewLevel('containers'); setContainerPathStack([]); }} className="hover:text-blue-600 font-semibold text-blue-700 dark:text-blue-400">{activeRoom.name}</button></>}
-              {containerPathStack.map((pathNode, idx) => (
-                <span key={pathNode.id} className="flex items-center gap-1.5">
-                  <ChevronRight className="size-3 text-slate-300" />
-                  <button onClick={() => setContainerPathStack(containerPathStack.slice(0, idx + 1))} className={`hover:text-blue-600 ${idx === containerPathStack.length - 1 ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600'}`}>{pathNode.name}</button>
-                </span>
-              ))}
+          <div className="w-full">
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+              <MapPin className="size-4 text-slate-400 shrink-0" />
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Current location</span>
+              <span className="text-slate-300 dark:text-slate-700">→</span>
+              
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 overflow-x-auto">
+                <button 
+                  onClick={() => { setViewLevel('locations'); setSelectedLocationId(null); setSelectedRoomId(null); setContainerPathStack([]); }} 
+                  className="hover:text-blue-600 transition-colors text-slate-600 dark:text-slate-400"
+                >
+                  Locations
+                </button>
+                {activeLocation && (
+                  <>
+                    <ChevronRight className="size-3 text-slate-300" />
+                    <button 
+                      onClick={() => { setViewLevel('rooms'); setSelectedRoomId(null); setContainerPathStack([]); }} 
+                      className="hover:text-blue-600 transition-colors text-slate-600 dark:text-slate-400"
+                    >
+                      {activeLocation.name}
+                    </button>
+                  </>
+                )}
+                {activeRoom && (
+                  <>
+                    <ChevronRight className="size-3 text-slate-300" />
+                    <button 
+                      onClick={() => { setViewLevel('containers'); setContainerPathStack([]); }} 
+                      className="hover:text-blue-600 transition-colors text-slate-600 dark:text-slate-400"
+                    >
+                      {activeRoom.name}
+                    </button>
+                  </>
+                )}
+                {containerPathStack.map((pathNode, idx) => {
+                  return (
+                    <span key={pathNode.id} className="flex items-center gap-1.5">
+                      <ChevronRight className="size-3 text-slate-300" />
+                      <button 
+                        onClick={() => setContainerPathStack(containerPathStack.slice(0, idx + 1))} 
+                        className="hover:text-blue-600 transition-colors text-slate-600 dark:text-slate-400"
+                      >
+                        {pathNode.name}
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Storage Hierarchy</h1>
             <p className="mt-1 text-sm text-slate-500">Navigate your physical inventory by location and storage compartment.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {viewLevel === 'locations' ? (
               <span className="text-xs text-slate-400 italic">Select a location to add rooms</span>
             ) : (
@@ -258,6 +298,32 @@ export default function StoragePage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Summary Metrics Cards */}
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          {summaryCards.map((card, idx) => {
+            const IconComponent = card.Icon;
+            return (
+              <div key={idx} className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{card.title}</span>
+                  <div className={`flex size-8 items-center justify-center rounded-lg ${card.iconColor || 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300'}`}>
+                    <IconComponent className="size-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-slate-900 dark:text-white">{card.value}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{card.detail}</p>
+                {card.showProgress && (
+                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: `${card.progressVal}%` }} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Main Grid */}
@@ -322,7 +388,7 @@ export default function StoragePage() {
                         <td className="px-3 py-3.5 text-[11px] font-mono text-slate-500">{item.sku}</td>
                         <td className="px-3 py-3.5 text-[11px] text-slate-500">{item.lotNumber}</td>
                         <td className="px-3 py-3.5 text-[11px] text-slate-500">
-                          {item.type === 1 || !item.expirationDate ? '' : item.expirationDate}
+                          {item.type === 1 || !item.expirationDate ? 'N/A' : item.expirationDate}
                         </td>
                         <td className="px-3 py-3.5 text-right text-[12px] font-semibold text-slate-900 dark:text-white">{item.quantity}</td>
                         <td className="px-3 py-3.5">
