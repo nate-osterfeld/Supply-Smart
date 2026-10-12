@@ -6,4 +6,5 @@ export interface InventoryItemDto {
     expirationDate: string;
     quantity: number;
     status: string;
+    type: number;
 }

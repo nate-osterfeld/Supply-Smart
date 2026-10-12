@@ -8,3 +8,5 @@ export * from './ProcedureForecastSummaryDto.ts';
 export * from './ContainerDto.ts';
 export * from './InventoryItemDto.ts';
 export * from './RoomDto.ts';
+export * from './CreateContainerDto.ts'
+export * from './CreateItemDto.ts'
