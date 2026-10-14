@@ -29,11 +29,42 @@ export function useStorage(containerId?: number) {
         },
     });
 
+    const updateRoomMutation = useMutation({
+        mutationFn: ({ roomId, name }: { roomId: number; name: string }) => 
+            service.updateRoom(roomId, name),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+        },
+    });
+
+    const deleteRoomMutation = useMutation({
+        mutationFn: (roomId: number) => service.deleteRoom(roomId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+        },
+    });
+
     const createContainerMutation = useMutation({
         mutationFn: ({ roomId, dto }: { roomId: number; dto: CreateContainerDto }) => 
             service.createContainer(roomId, dto),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+        },
+    });
+
+    const updateContainerMutation = useMutation({
+        mutationFn: ({ containerId, dto }: { containerId: number; dto: { name: string; kind: string } }) => 
+            service.updateContainer(containerId, dto),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+        },
+    });
+
+    const deleteContainerMutation = useMutation({
+        mutationFn: (containerId: number) => service.deleteContainer(containerId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['container-items'] });
         },
     });
 
@@ -82,7 +113,11 @@ export function useStorage(containerId?: number) {
         items: itemsQuery.data ?? [],
         isLoadingItems: itemsQuery.isLoading,
         createRoom: createRoomMutation.mutateAsync,
+        updateRoom: updateRoomMutation.mutateAsync,
+        deleteRoom: deleteRoomMutation.mutateAsync,
         createContainer: createContainerMutation.mutateAsync,
+        updateContainer: updateContainerMutation.mutateAsync,
+        deleteContainer: deleteContainerMutation.mutateAsync,
         addItem: addItemMutation.mutateAsync,
         updateItem: updateItemMutation.mutateAsync,
         deleteItem: deleteItemMutation.mutateAsync,
@@ -90,6 +125,6 @@ export function useStorage(containerId?: number) {
         moveItem: moveItemMutation.mutateAsync,
         isMoving: moveItemMutation.isPending,
         isUpdating: updateItemMutation.isPending,
-        isDeleting: deleteItemMutation.isPending
+        isDeleting: deleteItemMutation.isPending || deleteRoomMutation.isPending || deleteContainerMutation.isPending
     };
 }

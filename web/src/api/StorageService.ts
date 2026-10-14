@@ -5,7 +5,11 @@ export interface IStorageService {
     getLocations(): Promise<LocationDto[]>;
     getContainerItems(containerId?: number): Promise<InventoryItemDto[]>;
     createRoom(locationId: number, name: string): Promise<RoomDto>;
+    updateRoom(roomId: number, name: string): Promise<void>;
+    deleteRoom(roomId: number): Promise<void>;
     createContainer(roomId: number, dto: CreateContainerDto): Promise<ContainerDto>;
+    updateContainer(containerId: number, dto: { name: string; kind: string }): Promise<void>;
+    deleteContainer(containerId: number): Promise<void>;
     addItem(containerId: number, dto: CreateItemDto): Promise<InventoryItemDto>;
     moveItem(itemId: number, targetContainerId: number, quantityToMove?: number, minimumThreshold?: number): Promise<boolean>;
     updateItem(itemId: number, dto: UpdateItemDto): Promise<void>;
@@ -33,9 +37,25 @@ export class StorageService extends BaseApi implements IStorageService {
         return response.data;
     };
 
+    public updateRoom = async (roomId: number, name: string): Promise<void> => {
+        await this.put<void>(`api/locations/rooms/${roomId}`, { name });
+    };
+
+    public deleteRoom = async (roomId: number): Promise<void> => {
+        await this.delete<void>(`api/locations/rooms/${roomId}`);
+    };
+
     public createContainer = async (roomId: number, dto: CreateContainerDto): Promise<ContainerDto> => {
         const response = await this.post<ContainerDto>(`api/locations/rooms/${roomId}/containers`, dto);
         return response.data;
+    };
+
+    public updateContainer = async (containerId: number, dto: { name: string; kind: string }): Promise<void> => {
+        await this.put<void>(`api/locations/containers/${containerId}`, dto);
+    };
+
+    public deleteContainer = async (containerId: number): Promise<void> => {
+        await this.delete<void>(`api/locations/containers/${containerId}`);
     };
 
     public addItem = async (containerId: number, dto: CreateItemDto): Promise<InventoryItemDto> => {
