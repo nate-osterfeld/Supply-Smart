@@ -132,7 +132,7 @@ export default function StoragePage() {
         quantity: Number(itemQty),
         globalThreshold: 50,
         minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
-        unitCost: Number(itemCost) || 0,
+        unitCost: itemCost === '' ? 0 : Number(itemCost),
         type: Number(itemType),
         expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
       };
@@ -145,7 +145,7 @@ export default function StoragePage() {
 
       setActiveModal('none');
       setEditingItemId(null);
-      setItemName(''); setItemSku(''); setItemLot(''); setItemExp(''); setItemQty(10);
+      setItemName(''); setItemSku(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00);
     } catch (error) {
       console.error('Failed to save item:', error);
     }
@@ -430,7 +430,7 @@ export default function StoragePage() {
                       <th className="px-3 py-3">Lot number</th>
                       <th className="px-3 py-3">Expiration</th>
                       <th className="px-3 py-3 text-right">Quantity</th>
-                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3 min-w-[170px]">Status</th>
                       <th className="px-3 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -447,9 +447,21 @@ export default function StoragePage() {
                           </td>
                           <td className="px-3 py-3.5 text-right text-[12px] font-semibold text-slate-900 dark:text-white">{item.quantity}</td>
                           <td className="px-3 py-3.5">
-                            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-                              <span className="size-1.5 rounded-full bg-current" />{item.status}
-                            </span>
+                            <div className="flex flex-row flex-nowrap items-center gap-1.5">
+                              {item.statuses?.map((st: string) => {
+                                let badgeColor = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-400';
+                                if (st === 'Expiring Soon' || st === 'Low Stock') {
+                                  badgeColor = 'bg-amber-50 text-amber-700 dark:bg-amber-950/45 dark:text-amber-400';
+                                } else if (st === 'Expired' || st === 'Out of Stock') {
+                                  badgeColor = 'bg-rose-50 text-rose-700 dark:bg-rose-950/45 dark:text-rose-400';
+                                }
+                                return (
+                                  <span key={st} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap ${badgeColor}`}>
+                                    <span className="size-1.5 rounded-full bg-current" />{st}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           </td>
                           <td className="relative px-3 py-3.5 text-right">
                             <button 
@@ -568,6 +580,10 @@ export default function StoragePage() {
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Quantity</label>
                 <input type="number" value={itemQty} onChange={e => setItemQty(Number(e.target.value))} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Unit Cost ($)</label>
+                <input type="number" step="0.01" value={itemCost} onChange={e => setItemCost(e.target.value === '' ? '' : Number(e.target.value))} placeholder="5.00" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Local Bin Minimum Threshold</label>

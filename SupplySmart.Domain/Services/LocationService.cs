@@ -68,18 +68,47 @@ namespace SupplySmart.Domain.Services
 
             var items = await query.ToListAsync();
 
-            return items.Select(i => new InventoryItemDto
+            return items.Select(i =>
             {
-                Id = i.Id,
-                Name = i.Name,
-                Sku = i.Sku,
-                LotNumber = i.LotNumber,
-                ExpirationDate = i.ExpirationDate.HasValue ? i.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
-                Quantity = i.Quantity,
-                Status = i.Quantity <= i.MinimumThreshold
-                    ? "Low Stock"
-                    : (i.ExpirationDate <= DateTime.UtcNow.AddDays(30) ? "Expiring Soon" : "Safe"),
-                Type = (int)i.Type
+                var statuses = new List<string>();
+
+                if (i.Quantity == 0)
+                {
+                    statuses.Add("Out of Stock");
+                }
+                else if (i.Quantity <= i.MinimumThreshold)
+                {
+                    statuses.Add("Low Stock");
+                }
+
+                if (i.ExpirationDate.HasValue)
+                {
+                    if (i.ExpirationDate.Value <= DateTime.UtcNow)
+                    {
+                        statuses.Add("Expired");
+                    }
+                    else if (i.ExpirationDate.Value <= DateTime.UtcNow.AddDays(30))
+                    {
+                        statuses.Add("Expiring Soon");
+                    }
+                }
+
+                if (!statuses.Any())
+                {
+                    statuses.Add("Safe");
+                }
+
+                return new InventoryItemDto
+                {
+                    Id = i.Id,
+                    Name = i.Name,
+                    Sku = i.Sku,
+                    LotNumber = i.LotNumber,
+                    ExpirationDate = i.ExpirationDate.HasValue ? i.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
+                    Quantity = i.Quantity,
+                    Statuses = statuses,
+                    Type = (int)i.Type
+                };
             });
         }
 
