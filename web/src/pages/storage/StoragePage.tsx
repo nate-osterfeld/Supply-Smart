@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Folder, 
   Package, 
@@ -11,6 +11,9 @@ import {
   ClipboardList,
   ArrowLeft,
   ArrowRightLeft,
+  Pencil,
+  Trash2,
+  MoreVertical,
 } from 'lucide-react';
 import { useStorage } from '../../hooks/useStorage';
 
@@ -29,19 +32,35 @@ export default function StoragePage() {
 
   const selectedContainerId = currentParentContainerId ?? undefined;
 
+  // Active dropdown menu state for row actions
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Modal State
   const [activeModal, setActiveModal] = useState<ModalType>('none');
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityKind, setNewEntityKind] = useState('Cabinet');
 
-  // Item form state
+  // Item form state (used for both Add and Edit)
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemSku, setItemSku] = useState('');
   const [itemLot, setItemLot] = useState('');
   const [itemExp, setItemExp] = useState('');
   const [itemQty, setItemQty] = useState(10);
   const [itemMinThreshold, setItemMinThreshold] = useState<number | ''>(2);
-  const [itemCost] = useState<number | ''>(5.00);
+  const [itemCost, setItemCost] = useState<number | ''>(5.00);
   const [itemType, setItemType] = useState<number>(0); // 0 = Consumable, 1 = Reusable
 
   // Move item state
@@ -50,10 +69,36 @@ export default function StoragePage() {
   const [moveQty, setMoveQty] = useState<number | ''>('');
   const [moveThreshold, setMoveThreshold] = useState<number | ''>('');
 
-  const { locations, isLoadingLocations, items, isLoadingItems, createRoom, createContainer, addItem, moveItem } = useStorage(selectedContainerId);
+  const { locations, isLoadingLocations, items, isLoadingItems, createRoom, createContainer, addItem, updateItem, deleteItem, moveItem } = useStorage(selectedContainerId);
 
   const activeLocation = locations.find(l => l.id === selectedLocationId);
   const activeRoom = activeLocation?.rooms?.find(r => r.id === selectedRoomId);
+
+  const handleOpenAddModal = () => {
+    setEditingItemId(null);
+    setItemName('');
+    setItemSku('');
+    setItemLot('');
+    setItemExp('');
+    setItemQty(10);
+    setItemMinThreshold(2);
+    setItemCost(5.00);
+    setItemType(0);
+    setActiveModal('item');
+  };
+
+  const handleOpenEditModal = (item: any) => {
+    setEditingItemId(item.id);
+    setItemName(item.name || '');
+    setItemSku(item.sku || '');
+    setItemLot(item.lotNumber || '');
+    setItemExp(item.expirationDate ? item.expirationDate.split('T')[0] : '');
+    setItemQty(item.quantity ?? 10);
+    setItemMinThreshold(item.minimumThreshold ?? 2);
+    setItemCost(item.unitCost ?? 5.00);
+    setItemType(item.type ?? 0);
+    setActiveModal('item');
+  };
 
   const handleSaveUnit = async () => {
     if (!newEntityName.trim()) return;
@@ -86,24 +131,33 @@ export default function StoragePage() {
         lotNumber: itemLot || 'LOT-DEFAULT',
         quantity: Number(itemQty),
         globalThreshold: 50,
-        localThreshold: itemMinThreshold === '' ? null : Number(itemMinThreshold),
+        minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
         unitCost: Number(itemCost) || 0,
-        type: Number(itemType)
+        type: Number(itemType),
+        expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
       };
 
-      // Only include expirationDate if consumable and date is provided
-      if (Number(itemType) === 0 && itemExp) {
-        payload.expirationDate = new Date(itemExp).toISOString();
+      if (editingItemId !== null) {
+        await updateItem({ itemId: editingItemId, dto: payload });
+      } else {
+        await addItem({ containerId: selectedContainerId, dto: payload });
       }
 
-      await addItem({
-        containerId: selectedContainerId,
-        dto: payload
-      });
       setActiveModal('none');
+      setEditingItemId(null);
       setItemName(''); setItemSku(''); setItemLot(''); setItemExp(''); setItemQty(10);
     } catch (error) {
-      console.error('Failed to add item:', error);
+      console.error('Failed to save item:', error);
+    }
+  };
+
+  const handleDeleteItem = async (itemId: number, itemName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${itemName}" from inventory?`)) {
+      try {
+        await deleteItem(itemId);
+      } catch (error) {
+        console.error('Failed to delete item:', error);
+      }
     }
   };
 
@@ -132,7 +186,6 @@ export default function StoragePage() {
   const healthPercentage = totalItemsCount > 0 ? Math.round((safeItemsCount / totalItemsCount) * 100) : 100;
   const isHealthGood = healthPercentage >= 80;
   const capacityPercentage = Math.round((totalItemsCount / 20) * 100);
-  // const capacityPercentage = Math.min(100, totalItemsCount * 10);
 
   const summaryCards = [
     { title: 'Location capacity', value: `${capacityPercentage}%`, detail: `${totalItemsCount} of 20 slots occupied`, Icon: Folder, showProgress: true, progressVal: capacityPercentage },
@@ -348,7 +401,7 @@ export default function StoragePage() {
               </div>
               <button 
                 disabled={!selectedContainerId} 
-                onClick={() => setActiveModal('item')} 
+                onClick={handleOpenAddModal} 
                 className="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 <Plus className="size-3.5" /> Add item
@@ -382,30 +435,57 @@ export default function StoragePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {items.map((item: any) => (
-                      <tr key={item.id} className="hover:bg-slate-50/50">
-                        <td className="px-5 py-3.5 text-[12px] font-semibold text-slate-800 dark:text-slate-200">{item.name}</td>
-                        <td className="px-3 py-3.5 text-[11px] font-mono text-slate-500">{item.sku}</td>
-                        <td className="px-3 py-3.5 text-[11px] text-slate-500">{item.lotNumber}</td>
-                        <td className="px-3 py-3.5 text-[11px] text-slate-500">
-                          {item.type === 1 || !item.expirationDate ? 'N/A' : item.expirationDate}
-                        </td>
-                        <td className="px-3 py-3.5 text-right text-[12px] font-semibold text-slate-900 dark:text-white">{item.quantity}</td>
-                        <td className="px-3 py-3.5">
-                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-                            <span className="size-1.5 rounded-full bg-current" />{item.status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3.5 text-right">
-                          <button 
-                            onClick={() => { setItemToMove({ id: item.id, name: item.name, quantity: item.quantity }); setActiveModal('move'); }}
-                            className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                          >
-                            <ArrowRightLeft className="size-3" /> Move
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((item: any) => {
+                      const isMenuOpen = openMenuId === item.id;
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/50">
+                          <td className="px-5 py-3.5 text-[12px] font-semibold text-slate-800 dark:text-slate-200">{item.name}</td>
+                          <td className="px-3 py-3.5 text-[11px] font-mono text-slate-500">{item.sku}</td>
+                          <td className="px-3 py-3.5 text-[11px] text-slate-500">{item.lotNumber}</td>
+                          <td className="px-3 py-3.5 text-[11px] text-slate-500">
+                            {item.type === 1 || !item.expirationDate ? 'N/A' : item.expirationDate}
+                          </td>
+                          <td className="px-3 py-3.5 text-right text-[12px] font-semibold text-slate-900 dark:text-white">{item.quantity}</td>
+                          <td className="px-3 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+                              <span className="size-1.5 rounded-full bg-current" />{item.status}
+                            </span>
+                          </td>
+                          <td className="relative px-3 py-3.5 text-right">
+                            <button 
+                              onClick={() => setOpenMenuId(isMenuOpen ? null : item.id)}
+                              className="inline-flex items-center justify-center size-7 rounded-md text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                            >
+                              <MoreVertical className="size-4" />
+                            </button>
+
+                            {/* Dropdown Menu Popup */}
+                            {isMenuOpen && (
+                              <div ref={menuRef} className="absolute right-6 top-10 z-20 w-36 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800 text-left">
+                                <button 
+                                  onClick={() => { setOpenMenuId(null); handleOpenEditModal(item); }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60"
+                                >
+                                  <Pencil className="size-3.5 text-slate-400" /> Edit Item
+                                </button>
+                                <button 
+                                  onClick={() => { setOpenMenuId(null); setItemToMove({ id: item.id, name: item.name, quantity: item.quantity }); setActiveModal('move'); }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/60"
+                                >
+                                  <ArrowRightLeft className="size-3.5 text-slate-400" /> Move
+                                </button>
+                                <button 
+                                  onClick={() => { setOpenMenuId(null); handleDeleteItem(item.id, item.name); }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                                >
+                                  <Trash2 className="size-3.5" /> Delete
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -456,11 +536,13 @@ export default function StoragePage() {
         </div>
       )}
 
-      {/* Modal: Add Item with Threshold & Type configuration */}
+      {/* Modal: Add or Edit Item with Threshold & Type configuration */}
       {activeModal === 'item' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Add Inventory Item</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+              {editingItemId !== null ? 'Edit Inventory Item' : 'Add Inventory Item'}
+            </h3>
             <p className="mt-1 text-xs text-slate-500">Assign stock and configure local par levels for this bin.</p>
             
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -484,7 +566,7 @@ export default function StoragePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Initial Quantity</label>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Quantity</label>
                 <input type="number" value={itemQty} onChange={e => setItemQty(Number(e.target.value))} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
               </div>
               <div>
