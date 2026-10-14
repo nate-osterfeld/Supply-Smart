@@ -5,6 +5,8 @@ export interface InventoryItemDto {
     lotNumber: string;
     expirationDate: string;
     quantity: number;
+    minimumThreshold: number;
+    unitCost: number;
     statuses: string[];
     type: number;
 }

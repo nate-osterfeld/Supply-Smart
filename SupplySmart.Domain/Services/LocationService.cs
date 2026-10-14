@@ -106,6 +106,8 @@ namespace SupplySmart.Domain.Services
                     LotNumber = i.LotNumber,
                     ExpirationDate = i.ExpirationDate.HasValue ? i.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
                     Quantity = i.Quantity,
+                    MinimumThreshold = i.MinimumThreshold,
+                    UnitCost = i.UnitCost,
                     Statuses = statuses,
                     Type = (int)i.Type
                 };
@@ -133,7 +135,7 @@ namespace SupplySmart.Domain.Services
 
             return new
             {
-                CapacityPercentage = Math.Min(100, totalItems * 5), // Example capacity calculation based on item load
+                CapacityPercentage = Math.Min(100, totalItems * 5),
                 OccupiedSlots = totalItems,
                 MaxSlots = 20,
                 InventoryHealth = healthStatus,
@@ -171,7 +173,6 @@ namespace SupplySmart.Domain.Services
 
             if (room == null) throw new UnauthorizedAccessException("Invalid room scope.");
 
-            // Optional validation: Ensure parent container exists and belongs to the same room/org if specified
             if (parentContainerId.HasValue)
             {
                 var parentContainer = await _context.Containers
@@ -216,7 +217,7 @@ namespace SupplySmart.Domain.Services
                 Name = dto.Name,
                 Sku = dto.Sku,
                 LotNumber = dto.LotNumber,
-                Type = (ItemType) dto.Type,
+                Type = (ItemType)dto.Type,
                 ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate,
                 Quantity = dto.Quantity,
                 MinimumThreshold = dto.MinimumThreshold,
@@ -225,7 +226,6 @@ namespace SupplySmart.Domain.Services
 
             _context.InventoryItems.Add(item);
 
-            // Log to immutable audit trail
             _context.AuditLogs.Add(new AuditLog
             {
                 OrganizationId = organizationId,
@@ -246,7 +246,10 @@ namespace SupplySmart.Domain.Services
                 LotNumber = item.LotNumber,
                 ExpirationDate = item.ExpirationDate.HasValue ? item.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
                 Quantity = item.Quantity,
-                Status = "Safe"
+                MinimumThreshold = item.MinimumThreshold,
+                UnitCost = item.UnitCost,
+                Statuses = new List<string> { "Safe" },
+                Type = (int)item.Type
             };
         }
 
@@ -264,19 +267,16 @@ namespace SupplySmart.Domain.Services
 
             if (item == null || targetContainer == null) return false;
 
-            // Determine quantity to move (default to full quantity if not provided)
             int moveQty = quantityToMove ?? item.Quantity;
-            if (moveQty <= 0 || moveQty > item.Quantity) return false; // Invalid transfer amount
+            if (moveQty <= 0 || moveQty > item.Quantity) return false;
 
             var oldLocationContext = $"{item.Container.Room.Name} › {item.Container.Name}";
             var newLocationContext = $"{targetContainer.Room.Name} › {targetContainer.Name}";
 
             if (moveQty == item.Quantity)
             {
-                // Scenario 1: Full Transfer (Relocate entire row)
                 item.ContainerId = targetContainerId;
 
-                // If a new threshold was specified during the move, update it
                 if (minimumThreshold.HasValue)
                 {
                     item.MinimumThreshold = minimumThreshold.Value;
@@ -294,10 +294,8 @@ namespace SupplySmart.Domain.Services
             }
             else
             {
-                // Scenario 2 & 3: Partial Transfer (Split quantity)
                 item.Quantity -= moveQty;
 
-                // Check if an identical item batch already exists in the target container
                 var existingTargetItem = await _context.InventoryItems
                     .FirstOrDefaultAsync(i => i.OrganizationId == organizationId
                         && i.ContainerId == targetContainerId
@@ -307,12 +305,10 @@ namespace SupplySmart.Domain.Services
 
                 if (existingTargetItem != null)
                 {
-                    // Scenario 3: Merge into existing destination batch
                     existingTargetItem.Quantity += moveQty;
                 }
                 else
                 {
-                    // Scenario 2: Create a new split batch record in the destination container
                     var splitItem = new InventoryItem
                     {
                         OrganizationId = organizationId,
@@ -322,7 +318,7 @@ namespace SupplySmart.Domain.Services
                         LotNumber = item.LotNumber,
                         ExpirationDate = item.ExpirationDate,
                         Quantity = moveQty,
-                        MinimumThreshold = minimumThreshold ?? item.MinimumThreshold, // Use provided threshold or fall back to source
+                        MinimumThreshold = minimumThreshold ?? item.MinimumThreshold,
                         UnitCost = item.UnitCost
                     };
                     _context.InventoryItems.Add(splitItem);
@@ -352,9 +348,6 @@ namespace SupplySmart.Domain.Services
 
             if (item == null) return false;
 
-            var oldName = item.Name;
-
-            // Update properties
             item.Name = dto.Name;
             item.Sku = dto.Sku;
             item.LotNumber = dto.LotNumber;

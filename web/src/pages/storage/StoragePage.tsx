@@ -92,7 +92,17 @@ export default function StoragePage() {
     setItemName(item.name || '');
     setItemSku(item.sku || '');
     setItemLot(item.lotNumber || '');
-    setItemExp(item.expirationDate ? item.expirationDate.split('T')[0] : '');
+    
+    // Safely parse the display date back into YYYY-MM-DD for the date input if it exists
+    let formattedDate = '';
+    if (item.expirationDate && item.expirationDate !== 'N/A') {
+      const parsedDate = new Date(item.expirationDate);
+      if (!isNaN(parsedDate.getTime())) {
+        formattedDate = parsedDate.toISOString().split('T')[0];
+      }
+    }
+    setItemExp(formattedDate);
+
     setItemQty(item.quantity ?? 10);
     setItemMinThreshold(item.minimumThreshold ?? 2);
     setItemCost(item.unitCost ?? 5.00);
@@ -145,7 +155,7 @@ export default function StoragePage() {
 
       setActiveModal('none');
       setEditingItemId(null);
-      setItemName(''); setItemSku(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00);
+      setItemName(''); setItemSku(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00); setItemMinThreshold(2);
     } catch (error) {
       console.error('Failed to save item:', error);
     }
@@ -182,7 +192,7 @@ export default function StoragePage() {
 
   // Calculations
   const totalItemsCount = items.length;
-  const safeItemsCount = items.filter(i => i.status === 'Safe').length;
+  const safeItemsCount = items.filter(i => i.statuses?.includes('Safe')).length;
   const healthPercentage = totalItemsCount > 0 ? Math.round((safeItemsCount / totalItemsCount) * 100) : 100;
   const isHealthGood = healthPercentage >= 80;
   const capacityPercentage = Math.round((totalItemsCount / 20) * 100);
