@@ -59,6 +59,14 @@ export class BaseApi {
         return this.api.post<T>(`${this.baseUrl}/${url}`, data, config);
     }
 
+    protected put<T>(url: string, data?: object, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+        return this.api.put<T>(`${this.baseUrl}${url}`, data, config);
+    }
+
+    protected delete<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+        return this.api.delete<T>(`${this.baseUrl}${url}`, config);
+    }
+
     private getErrorMsg(err: unknown): string {
         if (axios.isAxiosError(err)) {
             const axiosErr = err as AxiosError<any>;
