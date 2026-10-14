@@ -145,5 +145,50 @@ namespace SupplySmart.Endpoints.Endpoints
                 return TypedResults.Problem("An unexpected error occurred.");
             }
         }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateItem(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int itemId,
+            [Microsoft.AspNetCore.Mvc.FromBody] UpdateItemDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+                var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+
+                var success = await locationService.UpdateItemAsync(orgId, itemId, dto, userEmail);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error updating item.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> DeleteItem(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int itemId)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+                var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+
+                var success = await locationService.DeleteItemAsync(orgId, itemId, userEmail);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error deleting item.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
     }
 }

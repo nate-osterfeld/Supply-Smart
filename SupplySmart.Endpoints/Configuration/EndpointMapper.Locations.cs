@@ -56,6 +56,22 @@ namespace SupplySmart.Endpoints.Configuration
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+            locationEndpoints.MapPut("/items/{itemId}", LocationEndpoints.UpdateItem)
+                .WithName("UpdateInventoryItem")
+                .WithDescription("Updates an existing inventory item's details and logs an audit trail event.")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+            locationEndpoints.MapDelete("/items/{itemId}", LocationEndpoints.DeleteItem)
+                .WithName("DeleteInventoryItem")
+                .WithDescription("Removes an inventory item from storage and logs an audit trail event.")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }

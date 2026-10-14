@@ -13,6 +13,8 @@ namespace SupplySmart.Domain.Services
         Task<ContainerDto> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId);
         Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail);
         Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail);
+        Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail);
+        Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail);
         Task<bool> DeleteContainerAsync(int organizationId, int containerId);
         Task<bool> DeleteRoomAsync(int organizationId, int roomId);
     }
@@ -308,6 +310,69 @@ namespace SupplySmart.Domain.Services
                 });
             }
 
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail)
+        {
+            var item = await _context.InventoryItems
+                .Include(i => i.Container)
+                .ThenInclude(c => c.Room)
+                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+
+            if (item == null) return false;
+
+            var oldName = item.Name;
+
+            // Update properties
+            item.Name = dto.Name;
+            item.Sku = dto.Sku;
+            item.LotNumber = dto.LotNumber;
+            item.Type = (ItemType)dto.Type;
+            item.ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate;
+            item.Quantity = dto.Quantity;
+            item.MinimumThreshold = dto.MinimumThreshold;
+            item.UnitCost = dto.UnitCost;
+
+            var locationContext = item.Container != null ? $"{item.Container.Room.Name} › {item.Container.Name}" : "Unknown Location";
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Item Updated",
+                ItemDetails = $"{item.Name} (Qty: {item.Quantity}, SKU: {item.Sku})",
+                LocationName = locationContext
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail)
+        {
+            var item = await _context.InventoryItems
+                .Include(i => i.Container)
+                .ThenInclude(c => c.Room)
+                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+
+            if (item == null) return false;
+
+            var locationContext = item.Container != null ? $"{item.Container.Room.Name} › {item.Container.Name}" : "Unknown Location";
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Item Deleted",
+                ItemDetails = $"{item.Name} (SKU: {item.Sku}) removed from inventory",
+                LocationName = locationContext
+            });
+
+            _context.InventoryItems.Remove(item);
             await _context.SaveChangesAsync();
             return true;
         }
