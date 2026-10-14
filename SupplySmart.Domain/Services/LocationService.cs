@@ -10,13 +10,16 @@ namespace SupplySmart.Domain.Services
         Task<IEnumerable<LocationDto>> GetLocationsAsync(int organizationId);
         Task<IEnumerable<InventoryItemDto>> GetContainerItemsAsync(int organizationId, int? containerId);
         Task<RoomDto> CreateRoomAsync(int organizationId, int locationId, string roomName);
+        Task<bool> UpdateRoomAsync(int organizationId, int roomId, string roomName, string userEmail);
+        Task<bool> DeleteRoomAsync(int organizationId, int roomId);
         Task<ContainerDto> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId);
+        Task<bool> UpdateContainerAsync(int organizationId, int containerId, string containerName, string kind, string userEmail);
+        Task<bool> DeleteContainerAsync(int organizationId, int containerId);
         Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail);
         Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail);
         Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail);
         Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail);
-        Task<bool> DeleteContainerAsync(int organizationId, int containerId);
-        Task<bool> DeleteRoomAsync(int organizationId, int roomId);
+        
     }
 
     public class LocationService : ILocationService
@@ -165,6 +168,44 @@ namespace SupplySmart.Domain.Services
             return new RoomDto { Id = room.Id, Name = room.Name };
         }
 
+        public async Task<bool> UpdateRoomAsync(int organizationId, int roomId, string roomName, string userEmail)
+        {
+            var room = await _context.Rooms
+                .Include(r => r.Location)
+                .FirstOrDefaultAsync(r => r.Id == roomId && r.Location.OrganizationId == organizationId);
+
+            if (room == null) return false;
+
+            var oldName = room.Name;
+            room.Name = roomName;
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Room Updated",
+                ItemDetails = $"Room renamed from '{oldName}' to '{roomName}'",
+                LocationName = room.Name
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteRoomAsync(int organizationId, int roomId)
+        {
+            var room = await _context.Rooms
+                .Include(r => r.Location)
+                .FirstOrDefaultAsync(r => r.Id == roomId && r.Location.OrganizationId == organizationId);
+
+            if (room == null) return false;
+
+            _context.Rooms.Remove(room);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<ContainerDto> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId)
         {
             var room = await _context.Rooms
@@ -199,6 +240,49 @@ namespace SupplySmart.Domain.Services
                 Kind = container.Kind,
                 ParentContainerId = container.ParentContainerId
             };
+        }
+
+        public async Task<bool> UpdateContainerAsync(int organizationId, int containerId, string containerName, string kind, string userEmail)
+        {
+            var container = await _context.Containers
+                .Include(c => c.Room)
+                .ThenInclude(r => r.Location)
+                .FirstOrDefaultAsync(c => c.Id == containerId && c.Room.Location.OrganizationId == organizationId);
+
+            if (container == null) return false;
+
+            var oldName = container.Name;
+            container.Name = containerName;
+            container.Kind = kind;
+
+            var locationContext = $"{container.Room.Name} › {container.Name}";
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Container Updated",
+                ItemDetails = $"Container '{oldName}' updated to '{containerName}' ({kind})",
+                LocationName = locationContext
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteContainerAsync(int organizationId, int containerId)
+        {
+            var container = await _context.Containers
+                .Include(c => c.Room)
+                .ThenInclude(r => r.Location)
+                .FirstOrDefaultAsync(c => c.Id == containerId && c.Room.Location.OrganizationId == organizationId);
+
+            if (container == null) return false;
+
+            _context.Containers.Remove(container);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail)
@@ -395,33 +479,6 @@ namespace SupplySmart.Domain.Services
             });
 
             _context.InventoryItems.Remove(item);
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<bool> DeleteContainerAsync(int organizationId, int containerId)
-        {
-            var container = await _context.Containers
-                .Include(c => c.Room)
-                .ThenInclude(r => r.Location)
-                .FirstOrDefaultAsync(c => c.Id == containerId && c.Room.Location.OrganizationId == organizationId);
-
-            if (container == null) return false;
-
-            _context.Containers.Remove(container);
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<bool> DeleteRoomAsync(int organizationId, int roomId)
-        {
-            var room = await _context.Rooms
-                .Include(r => r.Location)
-                .FirstOrDefaultAsync(r => r.Id == roomId && r.Location.OrganizationId == organizationId);
-
-            if (room == null) return false;
-
-            _context.Rooms.Remove(room);
             await _context.SaveChangesAsync();
             return true;
         }

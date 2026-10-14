@@ -78,6 +78,50 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateRoom(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int roomId,
+            [Microsoft.AspNetCore.Mvc.FromBody] CreateRoomDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+                var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+
+                var success = await locationService.UpdateRoomAsync(orgId, roomId, dto.Name, userEmail);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error updating room.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> DeleteRoom(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int roomId)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+
+                var success = await locationService.DeleteRoomAsync(orgId, roomId);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error deleting room.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
         public static async Task<Results<Ok<ContainerDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateContainer(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
@@ -96,6 +140,50 @@ namespace SupplySmart.Endpoints.Endpoints
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error creating container.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateContainer(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int containerId,
+            [Microsoft.AspNetCore.Mvc.FromBody] CreateContainerDto dto)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+                var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+
+                var success = await locationService.UpdateContainerAsync(orgId, containerId, dto.Name, dto.Kind, userEmail);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error updating container.");
+                return TypedResults.Problem("An unexpected error occurred.");
+            }
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> DeleteContainer(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            ILogger<LocationEndpoints> logger,
+            int containerId)
+        {
+            try
+            {
+                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
+
+                var success = await locationService.DeleteContainerAsync(orgId, containerId);
+                return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error deleting container.");
                 return TypedResults.Problem("An unexpected error occurred.");
             }
         }

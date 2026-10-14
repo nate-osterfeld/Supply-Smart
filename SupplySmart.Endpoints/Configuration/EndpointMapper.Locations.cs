@@ -35,12 +35,36 @@ namespace SupplySmart.Endpoints.Configuration
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
+            locationEndpoints.MapPut("/rooms/{roomId}", LocationEndpoints.UpdateRoom)
+                .WithName("UpdateRoom")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized);
+
+            locationEndpoints.MapDelete("/rooms/{roomId}", LocationEndpoints.DeleteRoom)
+                .WithName("DeleteRoom")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized);
+
             locationEndpoints.MapPost("/rooms/{roomId}/containers", LocationEndpoints.CreateContainer)
                 .WithName("CreateContainer")
                 .WithDescription("Creates a new storage bin or shelf inside a specified room.")
                 .Produces<ContainerDto>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+            locationEndpoints.MapPut("/containers/{containerId}", LocationEndpoints.UpdateContainer)
+                .WithName("UpdateContainer")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized);
+
+            locationEndpoints.MapDelete("/containers/{containerId}", LocationEndpoints.DeleteContainer)
+                .WithName("DeleteContainer")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized);
 
             locationEndpoints.MapPost("/containers/{containerId}/items", LocationEndpoints.AddItem)
                 .WithName("AddItemToContainer")
