@@ -18,7 +18,7 @@ import {
 import { useStorage } from '../../hooks/useStorage';
 
 type ViewLevel = 'locations' | 'rooms' | 'containers';
-type ModalType = 'none' | 'roomOrContainer' | 'item' | 'move';
+type ModalType = 'none' | 'roomOrContainer' | 'editRoom' | 'editContainer' | 'item' | 'move';
 
 export default function StoragePage() {
   const [viewLevel, setViewLevel] = useState<ViewLevel>('locations');
@@ -52,6 +52,10 @@ export default function StoragePage() {
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityKind, setNewEntityKind] = useState('Cabinet');
 
+  // Editing state for rooms/containers
+  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
+  const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
+
   // Item form state (used for both Add and Edit)
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [itemName, setItemName] = useState('');
@@ -61,7 +65,7 @@ export default function StoragePage() {
   const [itemQty, setItemQty] = useState(10);
   const [itemMinThreshold, setItemMinThreshold] = useState<number | ''>(2);
   const [itemCost, setItemCost] = useState<number | ''>(5.00);
-  const [itemType, setItemType] = useState<number>(0); // 0 = Consumable, 1 = Reusable
+  const [itemType, setItemType] = useState<number>(0);
 
   // Move item state
   const [itemToMove, setItemToMove] = useState<{ id: number; name: string; quantity: number } | null>(null);
@@ -69,7 +73,22 @@ export default function StoragePage() {
   const [moveQty, setMoveQty] = useState<number | ''>('');
   const [moveThreshold, setMoveThreshold] = useState<number | ''>('');
 
-  const { locations, isLoadingLocations, items, isLoadingItems, createRoom, createContainer, addItem, updateItem, deleteItem, moveItem } = useStorage(selectedContainerId);
+  const { 
+    locations, 
+    isLoadingLocations, 
+    items, 
+    isLoadingItems, 
+    createRoom, 
+    updateRoom,
+    deleteRoom,
+    createContainer, 
+    updateContainer,
+    deleteContainer,
+    addItem, 
+    updateItem, 
+    deleteItem, 
+    moveItem 
+  } = useStorage(selectedContainerId);
 
   const activeLocation = locations.find(l => l.id === selectedLocationId);
   const activeRoom = activeLocation?.rooms?.find(r => r.id === selectedRoomId);
@@ -93,7 +112,6 @@ export default function StoragePage() {
     setItemSku(item.sku || '');
     setItemLot(item.lotNumber || '');
     
-    // Safely parse the display date back into YYYY-MM-DD for the date input if it exists
     let formattedDate = '';
     if (item.expirationDate && item.expirationDate !== 'N/A') {
       const parsedDate = new Date(item.expirationDate);
@@ -104,16 +122,65 @@ export default function StoragePage() {
     setItemExp(formattedDate);
 
     setItemQty(item.quantity ?? 10);
-    setItemMinThreshold(item.minimumThreshold ?? 2);
-    setItemCost(item.unitCost ?? 5.00);
+    setItemMinThreshold(item.minimumThreshold > 0 ? item.minimumThreshold : 2);
+    setItemCost(item.unitCost > 0 ? item.unitCost : 5.00);
     setItemType(item.type ?? 0);
     setActiveModal('item');
+  };
+
+  const handleOpenEditRoomModal = (room: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingRoomId(room.id);
+    setNewEntityName(room.name);
+    setActiveModal('editRoom');
+  };
+
+  const handleOpenEditContainerModal = (container: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingContainerId(container.id);
+    setNewEntityName(container.name);
+    setNewEntityKind(container.kind || 'Cabinet');
+    setActiveModal('editContainer');
+  };
+
+  const handleDeleteRoom = async (roomId: number, roomName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete room "${roomName}" and all its contents?`)) {
+      try {
+        await deleteRoom(roomId);
+        if (selectedRoomId === roomId) {
+          setSelectedRoomId(null);
+          setViewLevel('rooms');
+        }
+      } catch (error) {
+        console.error('Failed to delete room:', error);
+      }
+    }
+  };
+
+  const handleDeleteContainer = async (containerId: number, containerName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete container "${containerName}"?`)) {
+      try {
+        await deleteContainer(containerId);
+        setContainerPathStack(prev => prev.filter(p => p.id !== containerId));
+      } catch (error) {
+        console.error('Failed to delete container:', error);
+      }
+    }
   };
 
   const handleSaveUnit = async () => {
     if (!newEntityName.trim()) return;
     try {
-      if (viewLevel === 'rooms' && selectedLocationId) {
+      if (activeModal === 'editRoom' && editingRoomId !== null) {
+        await updateRoom({ roomId: editingRoomId, name: newEntityName });
+      } else if (activeModal === 'editContainer' && editingContainerId !== null) {
+        await updateContainer({ 
+          containerId: editingContainerId, 
+          dto: { name: newEntityName, kind: newEntityKind } 
+        });
+      } else if (viewLevel === 'rooms' && selectedLocationId) {
         await createRoom({ locationId: selectedLocationId, name: newEntityName });
       } else if (viewLevel === 'containers' && selectedRoomId) {
         await createContainer({ 
@@ -127,8 +194,10 @@ export default function StoragePage() {
       }
       setActiveModal('none');
       setNewEntityName('');
+      setEditingRoomId(null);
+      setEditingContainerId(null);
     } catch (error) {
-      console.error('Failed to create unit:', error);
+      console.error('Failed to save unit:', error);
     }
   };
 
@@ -252,16 +321,28 @@ export default function StoragePage() {
         ))}
 
         {viewLevel === 'rooms' && (activeLocation?.rooms || []).map((room) => (
-          <button key={room.id} onClick={() => { setSelectedRoomId(room.id); setContainerPathStack([]); setViewLevel('containers'); }} className="group mb-1 flex w-full items-start gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50">
-            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"><Folder className="size-4" /></div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
+          <div 
+            key={room.id} 
+            onClick={() => { setSelectedRoomId(room.id); setContainerPathStack([]); setViewLevel('containers'); }} 
+            className="group mb-1 flex w-full items-center justify-between rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50 cursor-pointer"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"><Folder className="size-4" /></div>
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-200">{room.name}</p>
-                <ChevronRight className="size-4 text-slate-400" />
+                <p className="mt-1 truncate text-[11px] text-slate-400">{room.containers?.length || 0} storage units inside</p>
               </div>
-              <p className="mt-1 truncate text-[11px] text-slate-400">{room.containers?.length || 0} storage units inside</p>
             </div>
-          </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={(e) => handleOpenEditRoomModal(room, e)} title="Edit Room" className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Pencil className="size-3.5" />
+              </button>
+              <button onClick={(e) => handleDeleteRoom(room.id, room.name, e)} title="Delete Room" className="p-1.5 text-slate-400 hover:text-red-600">
+                <Trash2 className="size-3.5" />
+              </button>
+              <ChevronRight className="size-4 text-slate-400" />
+            </div>
+          </div>
         ))}
 
         {viewLevel === 'containers' && (
@@ -272,20 +353,30 @@ export default function StoragePage() {
               const isSelected = selectedContainerId === container.id;
               const hasChildren = allContainers.some(c => c.parentContainerId === container.id);
               return (
-                <button key={container.id} onClick={() => setContainerPathStack(prev => [...prev, { id: container.id, name: container.name }])} className={`group mb-1 flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${isSelected ? 'border-blue-200 bg-blue-50/70 shadow-2xs dark:border-blue-900 dark:bg-blue-950/40' : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50'}`}>
-                  <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${isSelected ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}><Package className="size-4" /></div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
+                <div 
+                  key={container.id} 
+                  onClick={() => setContainerPathStack(prev => [...prev, { id: container.id, name: container.name }])} 
+                  className={`group mb-1 flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition-colors cursor-pointer ${isSelected ? 'border-blue-200 bg-blue-50/70 shadow-2xs dark:border-blue-900 dark:bg-blue-950/40' : 'border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-800 dark:hover:bg-slate-800/50'}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ${isSelected ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}><Package className="size-4" /></div>
+                    <div className="min-w-0 flex-1">
                       <p className={`truncate text-[13px] font-semibold ${isSelected ? 'text-blue-950 dark:text-blue-200' : 'text-slate-800 dark:text-slate-200'}`}>{container.name}</p>
-                      <ChevronRight className="size-4 text-slate-400" />
-                    </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{container.kind}</span>
-                      <span className="size-1 rounded-full bg-slate-300" />
-                      <span className="text-[10px] text-slate-500">{hasChildren ? 'Storage' : 'Bin'}</span>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{container.kind}</span>
+                      </div>
                     </div>
                   </div>
-                </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={(e) => handleOpenEditContainerModal(container, e)} title="Edit Container" className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button onClick={(e) => handleDeleteContainer(container.id, container.name, e)} title="Delete Container" className="p-1.5 text-slate-400 hover:text-red-600">
+                      <Trash2 className="size-3.5" />
+                    </button>
+                    <ChevronRight className="size-4 text-slate-400" />
+                  </div>
+                </div>
               );
             })
           )
@@ -553,6 +644,59 @@ export default function StoragePage() {
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setActiveModal('none')} className="h-9 rounded-md border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</button>
               <button onClick={handleSaveUnit} className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Room */}
+      {activeModal === 'editRoom' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Room Name</h3>
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Room Name</label>
+              <input 
+                value={newEntityName} 
+                onChange={e => setNewEntityName(e.target.value)} 
+                className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setActiveModal('none')} className="h-9 rounded-md border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</button>
+              <button onClick={handleSaveUnit} className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Container */}
+      {activeModal === 'editContainer' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Storage Unit</h3>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Name</label>
+                <input 
+                  value={newEntityName} 
+                  onChange={e => setNewEntityName(e.target.value)} 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Container Kind</label>
+                <select value={newEntityKind} onChange={e => setNewEntityKind(e.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white">
+                  <option value="Cabinet">Cabinet</option>
+                  <option value="Shelf">Shelf</option>
+                  <option value="Bin">Bin</option>
+                  <option value="Cart">Cart</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setActiveModal('none')} className="h-9 rounded-md border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</button>
+              <button onClick={handleSaveUnit} className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">Save Changes</button>
             </div>
           </div>
         </div>
