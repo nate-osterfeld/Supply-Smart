@@ -6,4 +6,7 @@ public class DashboardMetricsDto
     public int ExpiringSoonCount { get; set; }
     public int ActiveLowStockAlertsCount { get; set; }
     public int PendingRestocksCount { get; set; }
+    public int SafeStockPercentage { get; set; }
+    public int ExpiringSoonPercentage { get; set; }
+    public int ExpiredPercentage { get; set; }
 }

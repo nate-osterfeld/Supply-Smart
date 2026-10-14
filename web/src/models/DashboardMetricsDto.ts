@@ -3,4 +3,7 @@ export interface DashboardMetricsDto {
     expiringSoonCount: number;
     activeLowStockAlertsCount: number;
     pendingRestocksCount: number;
+    safeStockPercentage: number;
+    expiringSoonPercentage: number;
+    expiredPercentage: number;
 }

@@ -35,13 +35,30 @@ namespace SupplySmart.Domain.Services
             }
 
             var items = await query.ToListAsync();
+            var totalItemsCount = items.Count;
+            var now = DateTime.UtcNow;
+
+            int expiredItemsCount = items.Count(i => i.ExpirationDate.HasValue && i.ExpirationDate.Value <= now);
+            int expiringSoonItemsCount = items.Count(i => i.ExpirationDate.HasValue && i.ExpirationDate.Value > now && i.ExpirationDate.Value <= now.AddDays(ExpiringSoonDaysThreshold));
+            int safeItemsCount = totalItemsCount - expiredItemsCount - expiringSoonItemsCount;
+
+            int expiredPct = totalItemsCount > 0 ? (int)Math.Round((double)expiredItemsCount / totalItemsCount * 100) : 0;
+            int expiringPct = totalItemsCount > 0 ? (int)Math.Round((double)expiringSoonItemsCount / totalItemsCount * 100) : 0;
+            int safePct = Math.Max(0, 100 - expiredPct - expiringPct);
 
             return new DashboardMetricsDto
             {
                 TotalInventoryValue = items.Sum(i => i.Quantity * i.UnitCost),
-                ExpiringSoonCount = items.Count(i => i.ExpirationDate <= DateTime.UtcNow.AddDays(ExpiringSoonDaysThreshold) && i.ExpirationDate > DateTime.UtcNow),
-                ActiveLowStockAlertsCount = items.Count(i => i.Quantity <= i.MinimumThreshold),
-                PendingRestocksCount = items.Count(i => i.IsRestockPending)
+                ExpiringSoonCount = items
+                    .Where(i => i.ExpirationDate.HasValue && i.ExpirationDate.Value > now && i.ExpirationDate.Value <= now.AddDays(ExpiringSoonDaysThreshold))
+                    .Sum(i => i.Quantity),
+                ActiveLowStockAlertsCount = items
+                    .Where(i => i.Quantity <= i.MinimumThreshold)
+                    .Sum(i => i.Quantity),
+                PendingRestocksCount = items.Count(i => i.IsRestockPending),
+                SafeStockPercentage = safePct,
+                ExpiringSoonPercentage = expiringPct,
+                ExpiredPercentage = expiredPct
             };
         }
 

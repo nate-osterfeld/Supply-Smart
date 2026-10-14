@@ -83,9 +83,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (screen: st
               <p className="mt-1 text-sm text-slate-500">Health status of your inventory</p>
             </div>
             <div className="flex flex-col gap-6 p-6">
-              <HealthBar label="Safe Stock" percentage={82} color="emerald" />
-              <HealthBar label="Expiring Soon" percentage={13} color="amber" />
-              <HealthBar label="Expired" percentage={5} color="rose" />
+              <HealthBar label="Safe Stock" percentage={isLoadingMetrics ? 0 : (metrics?.safeStockPercentage ?? 100)} color="emerald" />
+              <HealthBar label="Expiring Soon" percentage={isLoadingMetrics ? 0 : (metrics?.expiringSoonPercentage ?? 0)} color="amber" />
+              <HealthBar label="Expired" percentage={isLoadingMetrics ? 0 : (metrics?.expiredPercentage ?? 0)} color="rose" />
             </div>
           </section>
 
