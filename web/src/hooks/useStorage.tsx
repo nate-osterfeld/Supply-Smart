@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StorageService } from '../api/StorageService';
-import type { CreateContainerDto, CreateItemDto } from '../models';
+import type { CreateContainerDto, CreateItemDto, UpdateItemDto } from '../models';
 
 export function useStorage(containerId?: number) {
     const queryClient = useQueryClient();
@@ -42,7 +42,7 @@ export function useStorage(containerId?: number) {
             service.addItem(containerId, dto),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['container-items', variables.containerId] });
-            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] }); // updates item/capacity counts if displayed
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] }); 
         },
     });
 
@@ -54,7 +54,23 @@ export function useStorage(containerId?: number) {
             minimumThreshold?: number 
         }) => service.moveItem(itemId, targetContainerId, quantityToMove, minimumThreshold),
         onSuccess: () => {
-            // Invalidate all container item caches to reflect the transfer
+            queryClient.invalidateQueries({ queryKey: ['container-items'] });
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+        },
+    });
+
+    const updateItemMutation = useMutation({
+        mutationFn: ({ itemId, dto }: { itemId: number; dto: UpdateItemDto }) => 
+            service.updateItem(itemId, dto),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['container-items'] });
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+        },
+    });
+
+    const deleteItemMutation = useMutation({
+        mutationFn: (itemId: number) => service.deleteItem(itemId),
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['container-items'] });
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
         },
@@ -68,8 +84,12 @@ export function useStorage(containerId?: number) {
         createRoom: createRoomMutation.mutateAsync,
         createContainer: createContainerMutation.mutateAsync,
         addItem: addItemMutation.mutateAsync,
+        updateItem: updateItemMutation.mutateAsync,
+        deleteItem: deleteItemMutation.mutateAsync,
         isCreating: createRoomMutation.isPending || createContainerMutation.isPending || addItemMutation.isPending,
         moveItem: moveItemMutation.mutateAsync,
-        isMoving: moveItemMutation.isPending
+        isMoving: moveItemMutation.isPending,
+        isUpdating: updateItemMutation.isPending,
+        isDeleting: deleteItemMutation.isPending
     };
 }

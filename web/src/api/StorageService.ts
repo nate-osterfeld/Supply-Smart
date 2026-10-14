@@ -1,5 +1,5 @@
 import { BaseApi } from './BaseApi';
-import type { LocationDto, InventoryItemDto, CreateContainerDto, CreateItemDto, ContainerDto, RoomDto } from '../models';
+import type { LocationDto, InventoryItemDto, CreateContainerDto, CreateItemDto, ContainerDto, RoomDto, UpdateItemDto } from '../models';
 
 export interface IStorageService {
     getLocations(): Promise<LocationDto[]>;
@@ -7,6 +7,9 @@ export interface IStorageService {
     createRoom(locationId: number, name: string): Promise<RoomDto>;
     createContainer(roomId: number, dto: CreateContainerDto): Promise<ContainerDto>;
     addItem(containerId: number, dto: CreateItemDto): Promise<InventoryItemDto>;
+    moveItem(itemId: number, targetContainerId: number, quantityToMove?: number, minimumThreshold?: number): Promise<boolean>;
+    updateItem(itemId: number, dto: UpdateItemDto): Promise<void>;
+    deleteItem(itemId: number): Promise<void>;
 }
 
 export class StorageService extends BaseApi implements IStorageService {
@@ -47,5 +50,13 @@ export class StorageService extends BaseApi implements IStorageService {
             minimumThreshold
         });
         return response.data;
+    };
+
+    public updateItem = async (itemId: number, dto: UpdateItemDto): Promise<void> => {
+        await this.put<void>(`api/locations/items/${itemId}`, dto);
+    };
+
+    public deleteItem = async (itemId: number): Promise<void> => {
+        await this.delete<void>(`api/locations/items/${itemId}`);
     };
 }
