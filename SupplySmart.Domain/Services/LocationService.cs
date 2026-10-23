@@ -112,6 +112,7 @@ namespace SupplySmart.Domain.Services
                     MinimumThreshold = i.MinimumThreshold,
                     UnitCost = i.UnitCost,
                     Statuses = statuses,
+                    Category = !string.IsNullOrEmpty(i.Category) ? i.Category : "General",
                     Type = (int)i.Type
                 };
             });
@@ -300,6 +301,7 @@ namespace SupplySmart.Domain.Services
                 ContainerId = containerId,
                 Name = dto.Name,
                 Sku = dto.Sku,
+                Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General", // <-- Add this
                 LotNumber = dto.LotNumber,
                 Type = (ItemType)dto.Type,
                 ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate,
@@ -333,6 +335,7 @@ namespace SupplySmart.Domain.Services
                 MinimumThreshold = item.MinimumThreshold,
                 UnitCost = item.UnitCost,
                 Statuses = new List<string> { "Safe" },
+                Category = item.Category,
                 Type = (int)item.Type
             };
         }
@@ -440,6 +443,7 @@ namespace SupplySmart.Domain.Services
             item.Quantity = dto.Quantity;
             item.MinimumThreshold = dto.MinimumThreshold;
             item.UnitCost = dto.UnitCost;
+            item.Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General";
 
             var locationContext = item.Container != null ? $"{item.Container.Room.Name} › {item.Container.Name}" : "Unknown Location";
 

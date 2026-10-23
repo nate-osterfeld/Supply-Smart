@@ -11,3 +11,4 @@ export * from './RoomDto.ts';
 export * from './CreateContainerDto.ts'
 export * from './CreateItemDto.ts'
 export * from './UpdateItemDto.ts'
+export * from './MasterCatalogItemDto.ts'

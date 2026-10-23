@@ -11,6 +11,7 @@
         public int MinimumThreshold { get; set; }
         public decimal UnitCost { get; set; }
         public List<string> Statuses { get; set; } = new();
+        public string Category { get; set; } = string.Empty;
         public int Type { get; set; } // (0 = Consumable, 1 = Reusable)
     }
 }

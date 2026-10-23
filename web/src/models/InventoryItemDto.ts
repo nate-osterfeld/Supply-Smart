@@ -8,5 +8,6 @@ export interface InventoryItemDto {
     minimumThreshold: number;
     unitCost: number;
     statuses: string[];
+    category: string;
     type: number;
 }

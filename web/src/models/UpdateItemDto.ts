@@ -6,5 +6,6 @@ export interface UpdateItemDto {
   quantity: number;
   minimumThreshold: number;
   unitCost: number;
+  category: string;
   type: number; // 0 = Consumable, 1 = Reusable
 }
