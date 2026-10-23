@@ -26,6 +26,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITenantSeederService, TenantSeederService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
+builder.Services.AddScoped<ICatalogService, CatalogService>();
 builder.Services.AddHttpContextAccessor(); // Required for automatic audit logging timestamps
 
 // Configure JWT settings
@@ -72,6 +73,7 @@ app.UseStaticFiles();
 app.MapAuthEndpoints();
 app.MapDashboardEndpoints();
 app.MapLocationEndpoints();
+app.MapCatalogEndpoints();
 
 // Fallback routing for React Single Page Application (SPA) client-side routing
 app.MapFallbackToFile("index.html");
