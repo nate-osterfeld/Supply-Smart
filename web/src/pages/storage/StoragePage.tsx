@@ -60,6 +60,7 @@ export default function StoragePage() {
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemSku, setItemSku] = useState('');
+  const [itemCategory, setItemCategory] = useState('');
   const [itemLot, setItemLot] = useState('');
   const [itemExp, setItemExp] = useState('');
   const [itemQty, setItemQty] = useState(10);
@@ -97,6 +98,7 @@ export default function StoragePage() {
     setEditingItemId(null);
     setItemName('');
     setItemSku('');
+    setItemCategory('');
     setItemLot('');
     setItemExp('');
     setItemQty(10);
@@ -110,6 +112,7 @@ export default function StoragePage() {
     setEditingItemId(item.id);
     setItemName(item.name || '');
     setItemSku(item.sku || '');
+    setItemCategory(item.category || 'General');
     setItemLot(item.lotNumber || '');
     
     let formattedDate = '';
@@ -207,6 +210,7 @@ export default function StoragePage() {
       const payload: any = {
         name: itemName,
         sku: itemSku || 'SKU-GEN-01',
+        category: itemCategory || 'General',
         lotNumber: itemLot || 'LOT-DEFAULT',
         quantity: Number(itemQty),
         globalThreshold: 50,
@@ -224,7 +228,7 @@ export default function StoragePage() {
 
       setActiveModal('none');
       setEditingItemId(null);
-      setItemName(''); setItemSku(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00); setItemMinThreshold(2);
+      setItemName(''); setItemSku(''); setItemCategory(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00); setItemMinThreshold(2);
     } catch (error) {
       console.error('Failed to save item:', error);
     }
@@ -351,7 +355,6 @@ export default function StoragePage() {
           ) : (
             displayedContainers.map((container) => {
               const isSelected = selectedContainerId === container.id;
-              const hasChildren = allContainers.some(c => c.parentContainerId === container.id);
               return (
                 <div 
                   key={container.id} 
@@ -715,6 +718,10 @@ export default function StoragePage() {
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Item Name</label>
                 <input value={itemName} onChange={e => setItemName(e.target.value)} placeholder="e.g., Nitrile Gloves" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Category</label>
+                <input value={itemCategory} onChange={e => setItemCategory(e.target.value)} placeholder="e.g., Medical Supplies, PPE & Safety" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">SKU</label>

@@ -73,7 +73,9 @@ export function useStorage(containerId?: number) {
             service.addItem(containerId, dto),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['container-items', variables.containerId] });
-            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] }); 
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
         },
     });
 
@@ -87,6 +89,8 @@ export function useStorage(containerId?: number) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['container-items'] });
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
         },
     });
 
@@ -96,6 +100,8 @@ export function useStorage(containerId?: number) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['container-items'] });
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
         },
     });
 
@@ -104,6 +110,8 @@ export function useStorage(containerId?: number) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['container-items'] });
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
         },
     });
 
