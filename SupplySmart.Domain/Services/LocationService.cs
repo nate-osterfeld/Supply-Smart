@@ -8,6 +8,9 @@ namespace SupplySmart.Domain.Services
     public interface ILocationService
     {
         Task<IEnumerable<LocationDto>> GetLocationsAsync(int organizationId);
+        Task<LocationDto> CreateLocationAsync(int organizationId, string name, bool isPrimary, string userEmail);
+        Task<bool> UpdateLocationAsync(int organizationId, int locationId, string name, bool isPrimary, string userEmail);
+        Task<bool> DeleteLocationAsync(int organizationId, int locationId, string userEmail);
         Task<IEnumerable<InventoryItemDto>> GetContainerItemsAsync(int organizationId, int? containerId);
         Task<RoomDto> CreateRoomAsync(int organizationId, int locationId, string roomName);
         Task<bool> UpdateRoomAsync(int organizationId, int roomId, string roomName, string userEmail);
@@ -57,6 +60,85 @@ namespace SupplySmart.Domain.Services
                     }).ToList()
                 }).ToList()
             });
+        }
+
+        public async Task<LocationDto> CreateLocationAsync(int organizationId, string name, bool isPrimary, string userEmail)
+        {
+            var location = new Location
+            {
+                OrganizationId = organizationId,
+                Name = name,
+                IsPrimary = isPrimary
+            };
+
+            _context.Locations.Add(location);
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Location Created",
+                ItemDetails = $"New facility location '{name}' provisioned",
+                LocationName = name
+            });
+
+            await _context.SaveChangesAsync();
+
+            return new LocationDto
+            {
+                Id = location.Id,
+                Name = location.Name,
+                IsPrimary = location.IsPrimary,
+                Rooms = new List<RoomDto>()
+            };
+        }
+
+        public async Task<bool> UpdateLocationAsync(int organizationId, int locationId, string name, bool isPrimary, string userEmail)
+        {
+            var location = await _context.Locations
+                .FirstOrDefaultAsync(l => l.Id == locationId && l.OrganizationId == organizationId);
+
+            if (location == null) return false;
+
+            var oldName = location.Name;
+            location.Name = name;
+            location.IsPrimary = isPrimary;
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Location Updated",
+                ItemDetails = $"Location '{oldName}' updated to '{name}'",
+                LocationName = name
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteLocationAsync(int organizationId, int locationId, string userEmail)
+        {
+            var location = await _context.Locations
+                .FirstOrDefaultAsync(l => l.Id == locationId && l.OrganizationId == organizationId);
+
+            if (location == null) return false;
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = userEmail,
+                ActionType = "Location Deleted",
+                ItemDetails = $"Location '{location.Name}' removed",
+                LocationName = location.Name
+            });
+
+            _context.Locations.Remove(location);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<IEnumerable<InventoryItemDto>> GetContainerItemsAsync(int organizationId, int? containerId)

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using SupplySmart.Domain.Services;
 using SupplySmart.Integrations.Models.DTO;
@@ -30,6 +31,55 @@ namespace SupplySmart.Endpoints.Endpoints
                 logger.LogError(ex, "Error occurred while fetching locations hierarchy.");
                 return TypedResults.Problem("An unexpected error occurred.");
             }
+        }
+
+        public static async Task<Results<Ok<LocationDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateLocation(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            [FromBody] CreateLocationDto dto)
+        {
+            var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+            var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+            if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            var result = await locationService.CreateLocationAsync(orgId, dto.Name, dto.IsPrimary, userEmail);
+            return TypedResults.Ok(result);
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult>> UpdateLocation(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            int locationId,
+            [FromBody] CreateLocationDto dto)
+        {
+            var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+            var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+            if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            var success = await locationService.UpdateLocationAsync(orgId, locationId, dto.Name, dto.IsPrimary, userEmail);
+            return success ? TypedResults.Ok() : TypedResults.NotFound();
+        }
+
+        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult>> DeleteLocation(
+            ClaimsPrincipal claimsPrincipal,
+            ILocationService locationService,
+            int locationId)
+        {
+            var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+            var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
+            if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            var success = await locationService.DeleteLocationAsync(orgId, locationId, userEmail);
+            return success ? TypedResults.Ok() : TypedResults.NotFound();
         }
 
         public static async Task<Results<Ok<IEnumerable<InventoryItemDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetContainerItems(

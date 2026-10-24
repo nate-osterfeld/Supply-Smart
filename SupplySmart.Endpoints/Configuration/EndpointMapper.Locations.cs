@@ -21,6 +21,30 @@ namespace SupplySmart.Endpoints.Configuration
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
+            locationEndpoints.MapPost("/", LocationEndpoints.CreateLocation)
+                .RequireAuthorization(policy => policy.RequireRole("Admin"))
+                .WithName("CreateLocation")
+                .WithDescription("Provisions a new physical facility or warehouse branch under the tenant organization.")
+                .Produces<LocationDto>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+            locationEndpoints.MapPut("/{locationId}", LocationEndpoints.UpdateLocation)
+                .RequireAuthorization(policy => policy.RequireRole("Admin"))
+                .WithName("UpdateLocation")
+                .WithDescription("Updates an existing physical facility location's details.")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized);
+
+            locationEndpoints.MapDelete("/{locationId}", LocationEndpoints.DeleteLocation)
+                .RequireAuthorization(policy => policy.RequireRole("Admin"))
+                .WithName("DeleteLocation")
+                .WithDescription("Removes a physical facility location and logs an audit trail event.")
+                .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status401Unauthorized);
+
             locationEndpoints.MapGet("/items", LocationEndpoints.GetContainerItems)
                 .WithName("GetContainerItems")
                 .WithDescription("Fetches items housed in a specific storage container or bin.")
