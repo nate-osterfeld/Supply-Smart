@@ -17,6 +17,7 @@ import AuthPage from './pages/auth/AuthPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import StoragePage from './pages/storage/StoragePage';
 import CatalogPage from './pages/catalog/CatalogPage';
+import SettingsPage from './pages/settings/SettingsPage';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
@@ -32,6 +33,12 @@ export default function App() {
     setCurrentScreen(screenName);
   };
 
+  const userName = localStorage.getItem('supplysmart_name') || 'Workspace User';
+  const userRole = localStorage.getItem('supplysmart_role') || 'Staff';
+  
+  // Check if current user has admin privileges
+  const isAdmin = userRole === 'Admin'
+
   const workspaceItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'storage', label: 'Storage Units', icon: MapPin },
@@ -40,16 +47,15 @@ export default function App() {
     { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
 
-  const manageItems = [
+  // Restrict manage items strictly to administrators
+  const manageItems = isAdmin ? [
     { id: 'settings', label: 'Workspace Settings', icon: Settings2 },
-  ];
+  ] : [];
 
   if (currentScreen === 'auth' || !localStorage.getItem('supplysmart_token')) {
     return <AuthPage />;
   }
 
-  const userName = localStorage.getItem('supplysmart_name') || 'Workspace User';
-  const userRole = localStorage.getItem('supplysmart_role') || 'Administrator';
   const initials = userName
     .split(' ')
     .map((n) => n[0])
@@ -94,27 +100,29 @@ export default function App() {
             </nav>
           </div>
 
-          <div>
-            <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Manage</p>
-            <nav className="flex flex-col gap-1">
-              {manageItems.map(({ id, label, icon: Icon }) => {
-                const active = currentScreen === id;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => navigateTo(id)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
-                      active ? 'bg-slate-100 text-slate-950 font-semibold' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <Icon className={`size-4 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
-                    <span>{label}</span>
-                    {active && <span className="ml-auto size-1.5 rounded-full bg-blue-600" />}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+          {manageItems.length > 0 && (
+            <div>
+              <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Manage</p>
+              <nav className="flex flex-col gap-1">
+                {manageItems.map(({ id, label, icon: Icon }) => {
+                  const active = currentScreen === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => navigateTo(id)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
+                        active ? 'bg-slate-100 text-slate-950 font-semibold' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <Icon className={`size-4 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
+                      <span>{label}</span>
+                      {active && <span className="ml-auto size-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-slate-200/80 p-4">
@@ -175,6 +183,7 @@ export default function App() {
           {currentScreen === 'dashboard' && <DashboardPage onNavigate={navigateTo} />}
           {currentScreen === 'storage' && <StoragePage />}
           {currentScreen === 'catalog' && <CatalogPage />}
+          {currentScreen === 'settings' && <SettingsPage />}
         </main>
       </div>
     </div>

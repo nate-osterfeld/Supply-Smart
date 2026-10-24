@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StorageService } from '../api/StorageService';
-import type { CreateContainerDto, CreateItemDto, UpdateItemDto } from '../models';
+import type { CreateContainerDto, CreateItemDto, UpdateItemDto, CreateLocationDto } from '../models';
 
 export function useStorage(containerId?: number) {
     const queryClient = useQueryClient();
@@ -20,7 +20,30 @@ export function useStorage(containerId?: number) {
         enabled: !!localStorage.getItem('supplysmart_token') && !!containerId,
     });
 
-    // Mutations with automatic cache invalidation
+    const createLocationMutation = useMutation({
+        mutationFn: (dto: CreateLocationDto) => service.createLocation(dto),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
+        }
+    });
+
+    const updateLocationMutation = useMutation({
+        mutationFn: ({ locationId, dto }: { locationId: number; dto: CreateLocationDto }) => service.updateLocation(locationId, dto),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
+        }
+    });
+
+    const deleteLocationMutation = useMutation({
+        mutationFn: (locationId: number) => service.deleteLocation(locationId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
+        }
+    });
+
     const createRoomMutation = useMutation({
         mutationFn: ({ locationId, name }: { locationId: number; name: string }) => 
             service.createRoom(locationId, name),
@@ -53,7 +76,7 @@ export function useStorage(containerId?: number) {
     });
 
     const updateContainerMutation = useMutation({
-        mutationFn: ({ containerId, dto }: { containerId: number; dto: { name: string; kind: string } }) => 
+        mutationFn: ({ containerId, dto }: { containerId: number; dto: CreateContainerDto }) => 
             service.updateContainer(containerId, dto),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
@@ -120,6 +143,9 @@ export function useStorage(containerId?: number) {
         isLoadingLocations: locationsQuery.isLoading,
         items: itemsQuery.data ?? [],
         isLoadingItems: itemsQuery.isLoading,
+        createLocation: createLocationMutation.mutateAsync,
+        updateLocation: updateLocationMutation.mutateAsync,
+        deleteLocation: deleteLocationMutation.mutateAsync,
         createRoom: createRoomMutation.mutateAsync,
         updateRoom: updateRoomMutation.mutateAsync,
         deleteRoom: deleteRoomMutation.mutateAsync,
@@ -129,10 +155,10 @@ export function useStorage(containerId?: number) {
         addItem: addItemMutation.mutateAsync,
         updateItem: updateItemMutation.mutateAsync,
         deleteItem: deleteItemMutation.mutateAsync,
-        isCreating: createRoomMutation.isPending || createContainerMutation.isPending || addItemMutation.isPending,
         moveItem: moveItemMutation.mutateAsync,
+        isCreating: createRoomMutation.isPending || createContainerMutation.isPending || addItemMutation.isPending || createLocationMutation.isPending,
         isMoving: moveItemMutation.isPending,
-        isUpdating: updateItemMutation.isPending,
-        isDeleting: deleteItemMutation.isPending || deleteRoomMutation.isPending || deleteContainerMutation.isPending
+        isUpdating: updateItemMutation.isPending || updateLocationMutation.isPending,
+        isDeleting: deleteItemMutation.isPending || deleteRoomMutation.isPending || deleteContainerMutation.isPending || deleteLocationMutation.isPending
     };
 }

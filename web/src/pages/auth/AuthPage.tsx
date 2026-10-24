@@ -212,7 +212,7 @@ export default function AuthPage() {
                     <span className="min-w-0 flex-1">
                       <strong className="block truncate text-sm text-slate-900 dark:text-white">{loc.name}</strong>
                       <small className="mt-1 block text-xs text-slate-500">
-                        {loc.isPrimary ? 'Primary Facility Hub' : 'Active Satellite Branch'}
+                        {loc.isPrimary ? 'Primary Facility Hub' : 'Active Branch'}
                       </small>
                     </span>
                   </button>

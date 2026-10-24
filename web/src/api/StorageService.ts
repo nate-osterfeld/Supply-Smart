@@ -1,14 +1,17 @@
 import { BaseApi } from './BaseApi';
-import type { LocationDto, InventoryItemDto, CreateContainerDto, CreateItemDto, ContainerDto, RoomDto, UpdateItemDto } from '../models';
+import type { LocationDto, InventoryItemDto, CreateContainerDto, CreateItemDto, ContainerDto, RoomDto, UpdateItemDto, CreateLocationDto } from '../models';
 
 export interface IStorageService {
     getLocations(): Promise<LocationDto[]>;
     getContainerItems(containerId?: number): Promise<InventoryItemDto[]>;
+    createLocation(dto: CreateLocationDto): Promise<LocationDto>;
+    updateLocation(locationId: number, dto: CreateLocationDto): Promise<void>;
+    deleteLocation(locationId: number): Promise<void>;
     createRoom(locationId: number, name: string): Promise<RoomDto>;
     updateRoom(roomId: number, name: string): Promise<void>;
     deleteRoom(roomId: number): Promise<void>;
     createContainer(roomId: number, dto: CreateContainerDto): Promise<ContainerDto>;
-    updateContainer(containerId: number, dto: { name: string; kind: string }): Promise<void>;
+    updateContainer(containerId: number, dto: CreateContainerDto): Promise<void>; // Reusing CreateContainerDto
     deleteContainer(containerId: number): Promise<void>;
     addItem(containerId: number, dto: CreateItemDto): Promise<InventoryItemDto>;
     moveItem(itemId: number, targetContainerId: number, quantityToMove?: number, minimumThreshold?: number): Promise<boolean>;
@@ -18,7 +21,7 @@ export interface IStorageService {
 
 export class StorageService extends BaseApi implements IStorageService {
     public constructor() {
-        super(true); // usesAuth = true for protected routes requiring JWT token
+        super(true);
     }
 
     public getLocations = async (): Promise<LocationDto[]> => {
@@ -30,6 +33,19 @@ export class StorageService extends BaseApi implements IStorageService {
         const url = containerId ? `api/locations/items?containerId=${containerId}` : 'api/locations/items';
         const response = await this.get<InventoryItemDto[]>(url);
         return response.data;
+    };
+
+    public createLocation = async (dto: CreateLocationDto): Promise<LocationDto> => {
+        const response = await this.post<LocationDto>('api/locations', dto);
+        return response.data;
+    };
+
+    public updateLocation = async (locationId: number, dto: CreateLocationDto): Promise<void> => {
+        await this.put<void>(`api/locations/${locationId}`, dto);
+    };
+
+    public deleteLocation = async (locationId: number): Promise<void> => {
+        await this.delete<void>(`api/locations/${locationId}`);
     };
 
     public createRoom = async (locationId: number, name: string): Promise<RoomDto> => {
@@ -50,7 +66,7 @@ export class StorageService extends BaseApi implements IStorageService {
         return response.data;
     };
 
-    public updateContainer = async (containerId: number, dto: { name: string; kind: string }): Promise<void> => {
+    public updateContainer = async (containerId: number, dto: CreateContainerDto): Promise<void> => {
         await this.put<void>(`api/locations/containers/${containerId}`, dto);
     };
 
