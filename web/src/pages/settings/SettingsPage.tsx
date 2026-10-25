@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useStorage } from '../../hooks/useStorage'
+import { useUsers } from '../../hooks/useUsers'
 
 type IconProps = { className?: string; strokeWidth?: number }
 type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x'
@@ -99,7 +100,7 @@ function InlineIcon({ name, className, strokeWidth = 1.8 }: IconProps & { name: 
     ),
     settings: (
       <path 
-        d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 15l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 0 1-4 0v-.2a2 2 0 0 0-3.4-1.4l-.1.1a2 2 0 1 1-2.8-2.8l-.1-.1A2 2 0 0 0 1.7 12a2 2 0 0 1 0-4h.2a2 2 0 0 0 1.4-3.4l-.1-.1A2 2 0 1 1 6 1.7l.1.1A2 2 0 0 0 9.5.4V.2a2 2 0 0 1 4 0v.2a2 2 0 0 0 3.4 1.4l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A2 2 0 0 0 21.2 8h.2a2 2 0 0 1 0 4h-.2a2 2 0 0 0-1.8 3Z" 
+        d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 15l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-3.4 1.4v.2a2 2 0 0 1-4 0v-.2a2 2 0 0 0-3.4-1.4l-.1.1a2 2 0 1 1-2.8-2.8l-.1-.1A2 2 0 0 0 1.7 12a2 2 0 0 1 0-4h.2a2 2 0 0 0 1.4-3.4l-.1-.1A2 2 0 1 1 6 1.7l.1.1A2 2 0 0 0 9.5.4V.2a2 2 0 0 1 4 0v.2a2 2 0 0 0 3.4 1.4l-.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A2 2 0 0 0 21.2 8h.2a2 2 0 0 1 0 4h-.2a2 2 0 0 0-1.8 3Z" 
         transform="translate(0 4) scale(.67)" 
       />
     ),
@@ -232,7 +233,7 @@ export default function SettingsPage() {
           <ShieldCheck className="size-3.5 text-[#65758e]" />
           <span>Tenant ID: <strong className="font-semibold text-[#344154]">adv-dent-092</strong></span>
           <span className="mx-0.5 h-3.5 w-px bg-[#dfe4ea]" />
-          <span>Super-Admin Access</span>
+          <span>Admin Access</span>
         </div>
       </header>
 
@@ -334,10 +335,7 @@ function LocationModal({
             <h3 className="text-sm font-bold text-slate-900">{title}</h3>
             <p className="mt-0.5 text-[11px] text-slate-500">Configure your physical store or warehouse branch details.</p>
           </div>
-          <button 
-            onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-          >
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
             <InlineIcon name="x" className="size-4" />
           </button>
         </div>
@@ -371,10 +369,7 @@ function LocationModal({
         </div>
 
         <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
-          <button 
-            onClick={onClose}
-            className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
-          >
+          <button onClick={onClose} className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">
             Cancel
           </button>
           <button 
@@ -448,13 +443,7 @@ function DeleteConfirmationModal({
         </div>
 
         <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
-          <button 
-            onClick={() => {
-              setTypedName('')
-              onClose()
-            }}
-            className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
-          >
+          <button onClick={() => { setTypedName(''); onClose(); }} className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">
             Cancel
           </button>
           <button 
@@ -664,7 +653,133 @@ function LocationsPanel({ locations, isLoadingLocations, onAdd, onEdit, onDelete
   )
 }
 
+function InviteUserModal({ 
+  isOpen, 
+  onClose, 
+  onSubmit 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onSubmit: (dto: { fullName: string; email: string; role: string }) => Promise<any>;
+}) {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('Manager');
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim() || !email.trim()) return;
+    
+    try {
+      setSubmitting(true);
+      await onSubmit({ fullName: fullName.trim(), email: email.trim(), role });
+      setFullName('');
+      setEmail('');
+      setRole('Manager');
+      onClose();
+      alert('Invitation sent successfully! A secure temporary password has been generated.');
+    } catch (err) {
+      console.error('Failed to invite user:', err);
+      alert('Failed to invite user. Email may already be registered.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-xs p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 ring-1 ring-slate-900/5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Invite Team Member</h3>
+            <p className="mt-0.5 text-[11px] text-slate-500">System will auto-generate a secure temporary password.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+            <InlineIcon name="x" className="size-4" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="inv-name">Full Name</label>
+            <input 
+              id="inv-name"
+              type="text"
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="e.g. Alex Morgan"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="inv-email">Work Email</label>
+            <input 
+              id="inv-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="alex@supplysmart.io"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="inv-role">Assigned Role</label>
+            <select 
+              id="inv-role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
+            >
+              <option value="Admin">Admin</option>
+              <option value="Manager">Manager</option>
+              <option value="Staff">Staff</option>
+            </select>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              disabled={submitting}
+              className="h-9 rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 transition-all"
+            >
+              {submitting ? 'Generating Invite...' : 'Send Invite'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function PermissionsPanel() {
+  const { users, isLoadingUsers, inviteUser, deleteUser } = useUsers();
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+  const handleDeleteUser = async (userId: number, name: string) => {
+    if (window.confirm(`Are you sure you want to revoke access for ${name}?`)) {
+      try {
+        await deleteUser(userId);
+      } catch (err) {
+        console.error('Failed to revoke user:', err);
+        alert('Failed to revoke user access.');
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -672,37 +787,59 @@ function PermissionsPanel() {
         <p className="mt-1 text-[12px] text-[#8994a3]">Control who can view, edit, and administer your SupplySmart workspace.</p>
       </div>
       <div className="rounded-xl border border-[#e1e6ec] bg-white p-6 shadow-[0_1px_2px_rgba(23,32,51,0.02)]">
-        <div className="flex items-center gap-3 border-b border-[#edf0f3] pb-5">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-[#f0f3f7] text-[#64748b]">
-            <InlineIcon name="users" className="size-4" />
+        <div className="flex items-center justify-between border-b border-[#edf0f3] pb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-[#f0f3f7] text-[#64748b]">
+              <InlineIcon name="users" className="size-4" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold">Workspace roles</p>
+              <p className="mt-1 text-[11px] text-[#929cab]">{users.length} members have access to this tenant.</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[13px] font-semibold">Workspace roles</p>
-            <p className="mt-1 text-[11px] text-[#929cab]">3 members have access to this tenant.</p>
-          </div>
+          <button 
+            onClick={() => setIsInviteModalOpen(true)}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b3850]"
+          >
+            + Invite team member
+          </button>
         </div>
-        <div className="flex flex-col divide-y divide-[#edf0f3]">
-          <RoleRow initials="JD" name="Jordan Davis" email="jordan@adv-dent.com" role="Super Administrator" />
-          <RoleRow initials="AM" name="Alex Morgan" email="alex@adv-dent.com" role="Inventory Manager" />
-          <RoleRow initials="SK" name="Sam Kim" email="sam@adv-dent.com" role="Viewer" />
-        </div>
-        <button className="mt-5 h-9 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#536174] hover:bg-[#f8f9fb]">
-          Invite team member
-        </button>
-      </div>
-    </div>
-  )
-}
 
-function RoleRow({ initials, name, email, role }: { initials: string; name: string; email: string; role: string }) {
-  return (
-    <div className="flex items-center gap-3 py-4">
-      <div className="flex size-8 items-center justify-center rounded-full bg-[#e8edf4] text-[10px] font-bold text-[#61718a]">{initials}</div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-semibold">{name}</p>
-        <p className="truncate text-[11px] text-[#99a3b0]">{email}</p>
+        {isLoadingUsers ? (
+          <p className="py-8 text-xs text-slate-400 text-center">Loading tenant users...</p>
+        ) : users.length === 0 ? (
+          <p className="py-8 text-xs text-slate-400 text-center">No users found.</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-[#edf0f3]">
+            {users.map((u) => {
+              const initials = u.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+              return (
+                <div key={u.id} className="flex items-center gap-3 py-4">
+                  <div className="flex size-8 items-center justify-center rounded-full bg-[#e8edf4] text-[10px] font-bold text-[#61718a]">{initials}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold">{u.fullName}</p>
+                    <p className="truncate text-[11px] text-[#99a3b0]">{u.email}</p>
+                  </div>
+                  <span className="rounded-md bg-[#f2f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#687587]">{u.role}</span>
+                  <button 
+                    onClick={() => handleDeleteUser(u.id, u.fullName)}
+                    className="ml-2 rounded-md border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                    title="Revoke access"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-      <span className="rounded-md bg-[#f2f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#687587]">{role}</span>
+
+      <InviteUserModal 
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        onSubmit={inviteUser}
+      />
     </div>
-  )
+  );
 }
