@@ -16,12 +16,14 @@ namespace SupplySmart.Domain.Services
     {
         private readonly IBaseRepository<User> _userRepo;
         private readonly IBaseRepository<AuditLog> _auditRepo;
+        private readonly IEmailService _emailService;
         private readonly IPasswordHasher<User> _passwordHasher = new PasswordHasher<User>();
 
-        public UserService(IBaseRepository<User> userRepo, IBaseRepository<AuditLog> auditRepo)
+        public UserService(IBaseRepository<User> userRepo, IBaseRepository<AuditLog> auditRepo, IEmailService emailService)
         {
             _userRepo = userRepo;
             _auditRepo = auditRepo;
+            _emailService = emailService;
         }
 
         public async Task<IEnumerable<UserDto>> GetOrganizationUsersAsync(int organizationId)
@@ -64,8 +66,8 @@ namespace SupplySmart.Domain.Services
 
             await _userRepo.AddAsync(newUser);
 
-            // Simulate sending an invitation email (In production, replace with IEmailService)
-            System.Diagnostics.Debug.WriteLine($"[EMAIL SERVICE] Sending invite to {dto.Email}. Temporary Password: {tempPassword}");
+            // Send the email via SMTP (Mailpit locally / SendGrid in production)
+            await _emailService.SendInviteEmailAsync(dto.Email, dto.FullName, tempPassword);
 
             // Log immutable audit entry
             await _auditRepo.AddAsync(new AuditLog

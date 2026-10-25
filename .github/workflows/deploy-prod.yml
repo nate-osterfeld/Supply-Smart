@@ -29,6 +29,15 @@ jobs:
             },
             \"JwtSettings\": {
               \"Secret\": \"${{ secrets.JWT_SIGNING_KEY }}\"
+            },
+            \"EmailSettings\": {
+              \"Host\": \"smtp.sendgrid.net\",
+              \"Port\": 587,
+              \"SenderEmail\": \"osterfnl@mail.uc.edu\",
+              \"SenderName\": \"SupplySmart\",
+              \"Username\": \"apikey\",
+              \"BaseUrl\": \"https://supplysmart-prod.blackgrass-3604f914.eastus2.azurecontainerapps.io\"
+              \"ApiKey\": \"${{ secrets.SENDGRID_API_KEY }}\"
             }
           }" > SupplySmart.Host/appsettings.secrets.json
 
