@@ -23,6 +23,8 @@ builder.Services.AddDbContext<SupplySmartDbContext>(options =>
 // Register repositories & services for dependency injection
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(SupplySmartRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITenantSeederService, TenantSeederService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
@@ -71,6 +73,7 @@ app.UseStaticFiles();
 
 // Map API endpoints
 app.MapAuthEndpoints();
+app.MapUserEndpoints();
 app.MapDashboardEndpoints();
 app.MapLocationEndpoints();
 app.MapCatalogEndpoints();

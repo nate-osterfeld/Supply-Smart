@@ -5,7 +5,7 @@ namespace SupplySmart.Integrations.Models.Data;
 public enum UserRole
 {
     Admin,
-    InventoryManager,
+    Manager,
     Staff
 }
 
