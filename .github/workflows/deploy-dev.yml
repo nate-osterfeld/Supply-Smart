@@ -40,8 +40,8 @@ jobs:
               \"SenderEmail\": \"osterfnl@mail.uc.edu\",
               \"SenderName\": \"SupplySmart\",
               \"Username\": \"apikey\",
-              \"BaseUrl\": \"https://supplysmart-dev.blackgrass-3604f914.eastus2.azurecontainerapps.io\"
-              \"ApiKey\": \"${{ secrets.SENDGRID_API_KEY }}\",
+              \"BaseUrl\": \"https://supplysmart-dev.blackgrass-3604f914.eastus2.azurecontainerapps.io\",
+              \"ApiKey\": \"${{ secrets.SENDGRID_API_KEY }}\"
             }
           }" > SupplySmart.Host/appsettings.secrets.json
 
