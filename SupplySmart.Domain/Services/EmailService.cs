@@ -44,14 +44,18 @@ public class EmailService : IEmailService
             Subject = "You've been invited to SupplySmart",
             IsBodyHtml = true,
             Body = $@"
-            <p>Hello {fullName},</p>
-            <p>You have been invited to join SupplySmart.</p>
-            <p>Your temporary password is: <strong>{tempPassword}</strong></p>
-            <p>Please log in and update your password
-            <br>
-            <br>
-            <a href='{loginUrl}'>{loginUrl}</a></p>
-            "
+            <div style='font-family: Arial, sans-serif; color: #172033; line-height: 1.5;'>
+                <p>Hello {fullName},</p>
+                <p>You have been invited to join SupplySmart.</p>
+                <p>Your temporary password is: <strong>{tempPassword}</strong></p>
+                <p>Please log in and update your password by clicking the link below:</p>
+                <p style='margin: 24px 0;'>
+                    <a href='{loginUrl}' style='background-color: #172033; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>
+                        Access SupplySmart
+                    </a>
+                </p>
+                <p style='color: #8994a3; font-size: 12px;'>Or copy and paste this URL into your browser:<br>{loginUrl}</p>
+            </div>"
         };
         mailMessage.To.Add(toEmail);
 
