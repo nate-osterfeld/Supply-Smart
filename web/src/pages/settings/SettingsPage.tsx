@@ -5,7 +5,7 @@ import { useStorage } from '../../hooks/useStorage'
 import { useUsers } from '../../hooks/useUsers'
 
 type IconProps = { className?: string; strokeWidth?: number }
-type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x'
+type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x' | 'check'
 
 function InlineIcon({ name, className, strokeWidth = 1.8 }: IconProps & { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -130,6 +130,9 @@ function InlineIcon({ name, className, strokeWidth = 1.8 }: IconProps & { name: 
         <path d="m6 6 12 12M18 6 6 18" />
       </>
     ),
+    check: (
+      <path d="M20 6 9 17l-5-5" />
+    ),
   }
   
   return (
@@ -174,11 +177,27 @@ const template = `# 🚨 SupplySmart Low Stock Alert: {{item_name}}
 
 Please restock this item at your earliest convenience.`
 
+export type ToastMessage = {
+  id: number;
+  type: 'success' | 'error';
+  title: string;
+  message: string;
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('billing')
   const [alertTrigger, setAlertTrigger] = useState('Item Reaches Low-Stock Limit')
   const [templateValue, setTemplateValue] = useState(template)
   const [saved, setSaved] = useState(false)
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+
+  const addToast = (title: string, message: string, type: 'success' | 'error' = 'success') => {
+    const id = Date.now()
+    setToasts((prev) => [...prev, { id, title, message, type }])
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 3500)
+  }
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingLocation, setEditingLocation] = useState<any | null>(null)
@@ -189,9 +208,10 @@ export default function SettingsPage() {
   const handleCreateLocation = async (name: string, isPrimary: boolean) => {
     try {
       await createLocation({ name, isPrimary })
+      addToast('Location Created', `Successfully added "${name}".`)
     } catch (error) {
       console.error('Failed to create location:', error)
-      alert('Failed to create location.')
+      addToast('Error', 'Failed to create location.', 'error')
     }
   }
 
@@ -200,9 +220,10 @@ export default function SettingsPage() {
     try {
       await updateLocation({ locationId: editingLocation.id, dto: { name, isPrimary } })
       setEditingLocation(null)
+      addToast('Location Updated', `Successfully updated "${name}".`)
     } catch (error) {
       console.error('Failed to update location:', error)
-      alert('Failed to update location.')
+      addToast('Error', 'Failed to update location.', 'error')
     }
   }
 
@@ -210,15 +231,17 @@ export default function SettingsPage() {
     if (!deletingLocation) return
     try {
       await deleteLocation(deletingLocation.id)
+      addToast('Location Deleted', `Successfully deleted "${deletingLocation.name}".`)
       setDeletingLocation(null)
     } catch (error) {
       console.error('Failed to delete location:', error)
-      alert('Failed to delete location.')
+      addToast('Error', 'Failed to delete location.', 'error')
     }
   }
 
   const saveChanges = () => {
     setSaved(true)
+    addToast('Templates Saved', 'Low-stock email templates updated successfully.')
     window.setTimeout(() => setSaved(false), 2200)
   }
 
@@ -266,7 +289,7 @@ export default function SettingsPage() {
         <section className="min-w-0 flex-1 pb-12">
           {activeTab === 'billing' && <BillingPanel />}
           {activeTab === 'email' && <EmailPanel alertTrigger={alertTrigger} setAlertTrigger={setAlertTrigger} templateValue={templateValue} setTemplateValue={setTemplateValue} saveChanges={saveChanges} saved={saved} />}
-          {activeTab === 'permissions' && <PermissionsPanel />}
+          {activeTab === 'permissions' && <PermissionsPanel addToast={addToast} />}
           {activeTab === 'locations' && (
             <LocationsPanel 
               locations={locations} 
@@ -303,6 +326,35 @@ export default function SettingsPage() {
         onClose={() => setDeletingLocation(null)}
         onConfirm={handleConfirmDelete}
       />
+
+      <ToastContainer toasts={toasts} />
+    </div>
+  )
+}
+
+function ToastContainer({ toasts }: { toasts: ToastMessage[] }) {
+  if (toasts.length === 0) return null
+
+  return (
+    <div className="fixed bottom-6 left-6 z-50 flex flex-col gap-2 pointer-events-none">
+      {toasts.map((t) => (
+        <div 
+          key={t.id} 
+          className="pointer-events-auto flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-3 dark:border-slate-800 dark:bg-slate-900"
+        >
+          <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${
+            t.type === 'success' 
+              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400' 
+              : 'bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-400'
+          }`}>
+            <InlineIcon name={t.type === 'success' ? 'check' : 'x'} className="size-4" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{t.title}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">{t.message}</p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -656,11 +708,13 @@ function LocationsPanel({ locations, isLoadingLocations, onAdd, onEdit, onDelete
 function InviteUserModal({ 
   isOpen, 
   onClose, 
-  onSubmit 
+  onSubmit,
+  addToast
 }: { 
   isOpen: boolean; 
   onClose: () => void; 
   onSubmit: (dto: { fullName: string; email: string; role: string }) => Promise<any>;
+  addToast: (title: string, message: string, type?: 'success' | 'error') => void;
 }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -680,10 +734,10 @@ function InviteUserModal({
       setEmail('');
       setRole('Manager');
       onClose();
-      alert('Invitation sent successfully! A secure temporary password has been generated.');
+      addToast('Invitation Sent', 'An invitation email has been sent successfully.');
     } catch (err) {
       console.error('Failed to invite user:', err);
-      alert('Failed to invite user. Email may already be registered.');
+      addToast('Error', 'Failed to invite user. Email may already be registered.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -765,18 +819,69 @@ function InviteUserModal({
   );
 }
 
-function PermissionsPanel() {
+function RevokeUserModal({
+  isOpen,
+  user,
+  onClose,
+  onConfirm
+}: {
+  isOpen: boolean;
+  user: { id: number; fullName: string; email: string } | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen || !user) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-red-100 ring-1 ring-red-950/5">
+        <div className="flex items-start gap-4">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-4 ring-red-50/50">
+            <Trash2 className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Revoke Access</h3>
+            <p className="mt-0.5 text-[11px] text-red-600 font-semibold">Warning: This user will lose workspace access</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl bg-red-50/60 p-3.5 text-xs text-red-900/90 leading-relaxed border border-red-100/80">
+          Are you sure you want to revoke access for <strong className="font-semibold text-red-950">{user.fullName}</strong> ({user.email})? They will immediately be signed out of this tenant.
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+          <button onClick={onClose} className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">
+            Cancel
+          </button>
+          <button 
+            onClick={() => {
+              onConfirm()
+              onClose()
+            }}
+            className="h-9 rounded-xl bg-red-600 px-4 text-xs font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95"
+          >
+            Yes, Revoke Access
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PermissionsPanel({ addToast }: { addToast: (title: string, message: string, type?: 'success' | 'error') => void }) {
   const { users, isLoadingUsers, inviteUser, deleteUser } = useUsers();
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [revokingUser, setRevokingUser] = useState<{ id: number; fullName: string; email: string } | null>(null);
 
-  const handleDeleteUser = async (userId: number, name: string) => {
-    if (window.confirm(`Are you sure you want to revoke access for ${name}?`)) {
-      try {
-        await deleteUser(userId);
-      } catch (err) {
-        console.error('Failed to revoke user:', err);
-        alert('Failed to revoke user access.');
-      }
+  const handleConfirmRevoke = async () => {
+    if (!revokingUser) return;
+    try {
+      await deleteUser(revokingUser.id);
+      addToast('Access Revoked', `Successfully revoked access for ${revokingUser.fullName}.`);
+      setRevokingUser(null);
+    } catch (err) {
+      console.error('Failed to revoke user:', err);
+      addToast('Error', 'Failed to revoke user access.', 'error');
     }
   };
 
@@ -822,7 +927,7 @@ function PermissionsPanel() {
                   </div>
                   <span className="rounded-md bg-[#f2f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#687587]">{u.role}</span>
                   <button 
-                    onClick={() => handleDeleteUser(u.id, u.fullName)}
+                    onClick={() => setRevokingUser({ id: u.id, fullName: u.fullName, email: u.email })}
                     className="ml-2 rounded-md border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
                     title="Revoke access"
                   >
@@ -839,6 +944,14 @@ function PermissionsPanel() {
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
         onSubmit={inviteUser}
+        addToast={addToast}
+      />
+
+      <RevokeUserModal 
+        isOpen={!!revokingUser}
+        user={revokingUser}
+        onClose={() => setRevokingUser(null)}
+        onConfirm={handleConfirmRevoke}
       />
     </div>
   );
