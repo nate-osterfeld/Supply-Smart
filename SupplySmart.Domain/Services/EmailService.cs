@@ -47,6 +47,7 @@ public class EmailService : IEmailService
             <div style='font-family: Arial, sans-serif; color: #172033; line-height: 1.5;'>
                 <p>Hello {fullName},</p>
                 <p>You have been invited to join SupplySmart.</p>
+                <p>Your login email is: <strong>{toEmail}</strong></p>
                 <p>Your temporary password is: <strong>{tempPassword}</strong></p>
                 <p>Please log in and update your password by clicking the link below:</p>
                 <p style='margin: 24px 0;'>
