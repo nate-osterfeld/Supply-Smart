@@ -12,11 +12,11 @@ namespace SupplySmart.Endpoints.Configuration
         {
             var userEndpoints = app.MapGroup("/api/settings/users")
                 .WithTags("Tenant User Permissions")
-                .RequireAuthorization();
+                .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
             userEndpoints.MapGet("/", UserEndpoints.GetUsers)
                 .WithName("GetTenantUsers")
-                .WithDescription("Fetch tenant users (Accessible to authenticated members)")
+                .WithDescription("Fetch users in the administrator's organization")
                 .Produces<IEnumerable<UserDto>>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status401Unauthorized);
 
@@ -28,7 +28,13 @@ namespace SupplySmart.Endpoints.Configuration
                 .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status401Unauthorized);
 
-            userEndpoints.MapDelete("/{userId}", UserEndpoints.DeleteUser)
+            userEndpoints.MapPut("/{userId:int}/role", UserEndpoints.UpdateRole)
+                .WithName("UpdateTenantUserRole")
+                .Produces<UserDto>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest)
+                .Produces(StatusCodes.Status404NotFound);
+
+            userEndpoints.MapDelete("/{userId:int}", UserEndpoints.DeleteUser)
                 .RequireAuthorization(policy => policy.RequireRole("Admin"))
                 .WithName("RevokeTenantUser")
                 .WithDescription("Revoke user access (Restricted strictly to Admins)")

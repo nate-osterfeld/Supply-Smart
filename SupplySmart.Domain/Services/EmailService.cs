@@ -7,6 +7,7 @@ namespace SupplySmart.Domain.Services;
 public interface IEmailService
 {
     Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword);
+    Task SendAlertEmailAsync(string toEmail, string subject, string body);
 }
 
 public class EmailService : IEmailService
@@ -16,6 +17,27 @@ public class EmailService : IEmailService
     public EmailService(IConfiguration configuration)
     {
         _configuration = configuration;
+    }
+
+    public async Task SendAlertEmailAsync(string toEmail, string subject, string body)
+    {
+        using var client = new SmtpClient(
+            _configuration["EmailSettings:Host"] ?? "localhost",
+            int.Parse(_configuration["EmailSettings:Port"] ?? "1025"));
+        var apiKey = _configuration["EmailSettings:ApiKey"];
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            client.Credentials = new NetworkCredential(_configuration["EmailSettings:Username"] ?? "apikey", apiKey);
+            client.EnableSsl = true;
+        }
+        using var message = new MailMessage
+        {
+            From = new MailAddress(_configuration["EmailSettings:SenderEmail"] ?? "no-reply@supplysmart.io",
+                _configuration["EmailSettings:SenderName"] ?? "SupplySmart"),
+            Subject = subject, Body = body, IsBodyHtml = false
+        };
+        message.To.Add(toEmail);
+        await client.SendMailAsync(message);
     }
 
     public async Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
@@ -36,9 +58,12 @@ public class EmailService : IEmailService
             client.EnableSsl = true;
         }
 
-        var loginUrl = $"{baseUrl}"; // TODO: add login route so url reads $"{baseUrl}/login"
+        var loginUrl = WebUtility.HtmlEncode($"{baseUrl.TrimEnd('/')}/login");
+        fullName = WebUtility.HtmlEncode(fullName);
+        var displayEmail = WebUtility.HtmlEncode(toEmail);
+        tempPassword = WebUtility.HtmlEncode(tempPassword);
 
-        var mailMessage = new MailMessage
+        using var mailMessage = new MailMessage
         {
             From = new MailAddress(senderEmail, senderName),
             Subject = "You've been invited to SupplySmart",
@@ -47,9 +72,9 @@ public class EmailService : IEmailService
             <div style='font-family: Arial, sans-serif; color: #172033; line-height: 1.5;'>
                 <p>Hello {fullName},</p>
                 <p>You have been invited to join SupplySmart.</p>
-                <p>Your login email is: <strong>{toEmail}</strong></p>
+                <p>Your login email is: <strong>{displayEmail}</strong></p>
                 <p>Your temporary password is: <strong>{tempPassword}</strong></p>
-                <p>Please log in and update your password by clicking the link below:</p>
+                <p>Use these details to sign in through the link below:</p>
                 <p style='margin: 24px 0;'>
                     <a href='{loginUrl}' style='background-color: #172033; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>
                         Access SupplySmart

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useStorage } from '../../hooks/useStorage'
-import { useUsers } from '../../hooks/useUsers'
+import PermissionsPanel from './PermissionsPanel'
+import EmailTemplatesPanel from './EmailTemplatesPanel'
 
 type IconProps = { className?: string; strokeWidth?: number }
 type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x' | 'check'
@@ -151,12 +152,10 @@ function InlineIcon({ name, className, strokeWidth = 1.8 }: IconProps & { name: 
   )
 }
 
-const ChevronDown = (props: IconProps) => <InlineIcon name="chevron-down" {...props} />
 const Mail = (props: IconProps) => <InlineIcon name="mail" {...props} />
+const ChevronDown = (props: IconProps) => <InlineIcon name="chevron-down" {...props} />
 const MapPin = (props: IconProps) => <InlineIcon name="map-pin" {...props} />
 const Pencil = (props: IconProps) => <InlineIcon name="pencil" {...props} />
-const Save = (props: IconProps) => <InlineIcon name="save" {...props} />
-const Send = (props: IconProps) => <InlineIcon name="send" {...props} />
 const ShieldCheck = (props: IconProps) => <InlineIcon name="shield" {...props} />
 const Sparkles = (props: IconProps) => <InlineIcon name="sparkles" {...props} />
 const Trash2 = (props: IconProps) => <InlineIcon name="trash" {...props} />
@@ -169,14 +168,6 @@ const settingsTabs = [
   { id: 'locations', label: 'Locations & Warehouses', icon: MapPin },
 ]
 
-const template = `# 🚨 SupplySmart Low Stock Alert: {{item_name}}
-
-**Location:** {{supply_room}}  
-**Current Stock:** {{current_quantity}}  
-**Minimum Threshold:** {{minimum_threshold}}
-
-Please restock this item at your earliest convenience.`
-
 export type ToastMessage = {
   id: number;
   type: 'success' | 'error';
@@ -186,9 +177,7 @@ export type ToastMessage = {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('billing')
-  const [alertTrigger, setAlertTrigger] = useState('Item Reaches Low-Stock Limit')
-  const [templateValue, setTemplateValue] = useState(template)
-  const [saved, setSaved] = useState(false)
+  const [emailDirty, setEmailDirty] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
   const addToast = (title: string, message: string, type: 'success' | 'error' = 'success') => {
@@ -239,11 +228,6 @@ export default function SettingsPage() {
     }
   }
 
-  const saveChanges = () => {
-    setSaved(true)
-    addToast('Templates Saved', 'Low-stock email templates updated successfully.')
-    window.setTimeout(() => setSaved(false), 2200)
-  }
 
   return (
     <div className="min-h-screen bg-[#f7f8fa] text-[#172033] pb-12">
@@ -267,7 +251,13 @@ export default function SettingsPage() {
             {settingsTabs.map(({ id, label, icon: Icon }) => (
               <button 
                 key={id} 
-                onClick={() => setActiveTab(id)} 
+                onClick={() => {
+                  if (id === activeTab) return
+                  if (!emailDirty || window.confirm('Discard your unsaved email template changes?')) {
+                    setActiveTab(id)
+                    setEmailDirty(false)
+                  }
+                }}
                 className={`flex items-start gap-3 rounded-lg px-3 py-3 text-left text-[13px] leading-5 transition-all ${
                   activeTab === id 
                     ? 'bg-white font-semibold text-[#172033] shadow-[0_1px_3px_rgba(23,32,51,0.08)] ring-1 ring-[#e6e9ee]' 
@@ -288,7 +278,7 @@ export default function SettingsPage() {
 
         <section className="min-w-0 flex-1 pb-12">
           {activeTab === 'billing' && <BillingPanel />}
-          {activeTab === 'email' && <EmailPanel alertTrigger={alertTrigger} setAlertTrigger={setAlertTrigger} templateValue={templateValue} setTemplateValue={setTemplateValue} saveChanges={saveChanges} saved={saved} />}
+          {activeTab === 'email' && <EmailTemplatesPanel addToast={addToast} onDirtyChange={setEmailDirty} />}
           {activeTab === 'permissions' && <PermissionsPanel addToast={addToast} />}
           {activeTab === 'locations' && (
             <LocationsPanel 
@@ -568,71 +558,6 @@ function BillingPanel() {
   )
 }
 
-function EmailPanel({ alertTrigger, setAlertTrigger, templateValue, setTemplateValue, saveChanges, saved }: { alertTrigger: string; setAlertTrigger: (value: string) => void; templateValue: string; setTemplateValue: (value: string) => void; saveChanges: () => void; saved: boolean }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-[14px] font-semibold">Low-Stock Email Templates</p>
-        <p className="mt-1 text-[12px] text-[#8994a3]">Customize the markdown text blocks auto-fired to phone networks during threshold triggers.</p>
-      </div>
-      <div className="rounded-xl border border-[#e1e6ec] bg-white shadow-[0_1px_2px_rgba(23,32,51,0.02)]">
-        <div className="border-b border-[#edf0f3] p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f0f3f7] text-[#64748b]">
-              <InlineIcon name="bell" className="size-4" />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold">Alert notification content</p>
-              <p className="mt-1 text-[11px] leading-5 text-[#929cab]">Use the available variables to personalize notifications sent to your team.</p>
-            </div>
-          </div>
-          <label className="mt-5 block text-[11px] font-semibold text-[#536174]" htmlFor="trigger">Alert Event Trigger</label>
-          <div className="relative mt-2">
-            <select 
-              id="trigger" 
-              value={alertTrigger} 
-              onChange={(event) => setAlertTrigger(event.target.value)} 
-              className="h-10 w-full appearance-none rounded-lg border border-[#dfe4ea] bg-white px-3 text-[12px] text-[#344154] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]"
-            >
-              <option>Item Reaches Low-Stock Limit</option>
-              <option>Item Falls Out of Stock</option>
-              <option>Weekly Inventory Digest</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-3 size-4 text-[#8994a3]" />
-          </div>
-        </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-semibold text-[#536174]" htmlFor="template">Message template</label>
-            <span className="text-[10px] text-[#a1aab7]">Markdown supported</span>
-          </div>
-          <textarea 
-            id="template" 
-            value={templateValue} 
-            onChange={(event) => setTemplateValue(event.target.value)} 
-            className="mt-2 min-h-[245px] w-full resize-y rounded-lg border border-[#dfe4ea] bg-[#fbfcfd] p-4 font-mono text-[12px] leading-6 text-[#485568] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]" 
-            spellCheck={false} 
-          />
-          <div className="mt-5 flex flex-col-reverse gap-3 border-t border-[#edf0f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] text-[#9aa4b2]">Last updated by Jordan Davis · Just now</p>
-            <div className="flex gap-2">
-              <button className="flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#536174] transition-colors hover:bg-[#f8f9fb]">
-                <Send className="size-3.5" />Send Test Alert
-              </button>
-              <button 
-                onClick={saveChanges} 
-                className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b374b]"
-              >
-                <Save className="size-3.5" />{saved ? 'Changes Saved' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function LocationsPanel({ locations, isLoadingLocations, onAdd, onEdit, onDelete }: { locations: any[]; isLoadingLocations: boolean; onAdd: () => void; onEdit: (loc: any) => void; onDelete: (loc: any) => void }) {
   return (
     <div className="flex flex-col gap-6">
@@ -703,256 +628,4 @@ function LocationsPanel({ locations, isLoadingLocations, onAdd, onEdit, onDelete
       </div>
     </div>
   )
-}
-
-function InviteUserModal({ 
-  isOpen, 
-  onClose, 
-  onSubmit,
-  addToast
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  onSubmit: (dto: { fullName: string; email: string; role: string }) => Promise<any>;
-  addToast: (title: string, message: string, type?: 'success' | 'error') => void;
-}) {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('Manager');
-  const [submitting, setSubmitting] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim() || !email.trim()) return;
-    
-    try {
-      setSubmitting(true);
-      await onSubmit({ fullName: fullName.trim(), email: email.trim(), role });
-      setFullName('');
-      setEmail('');
-      setRole('Manager');
-      onClose();
-      addToast('Invitation Sent', 'An invitation email has been sent successfully.');
-    } catch (err) {
-      console.error('Failed to invite user:', err);
-      addToast('Error', 'Failed to invite user. Email may already be registered.', 'error');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-xs p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 ring-1 ring-slate-900/5">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Invite Team Member</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">System will auto-generate a secure temporary password.</p>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-            <InlineIcon name="x" className="size-4" />
-          </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="inv-name">Full Name</label>
-            <input 
-              id="inv-name"
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Alex Morgan"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="inv-email">Work Email</label>
-            <input 
-              id="inv-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="alex@supplysmart.io"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="inv-role">Assigned Role</label>
-            <select 
-              id="inv-role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs font-medium text-slate-900 outline-none focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-            >
-              <option value="Admin">Admin</option>
-              <option value="Manager">Manager</option>
-              <option value="Staff">Staff</option>
-            </select>
-          </div>
-
-          <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
-            <button 
-              type="button"
-              onClick={onClose}
-              className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit"
-              disabled={submitting}
-              className="h-9 rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 transition-all"
-            >
-              {submitting ? 'Generating Invite...' : 'Send Invite'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function RevokeUserModal({
-  isOpen,
-  user,
-  onClose,
-  onConfirm
-}: {
-  isOpen: boolean;
-  user: { id: number; fullName: string; email: string } | null;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  if (!isOpen || !user) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-red-100 ring-1 ring-red-950/5">
-        <div className="flex items-start gap-4">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-4 ring-red-50/50">
-            <Trash2 className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Revoke Access</h3>
-            <p className="mt-0.5 text-[11px] text-red-600 font-semibold">Warning: This user will lose workspace access</p>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-xl bg-red-50/60 p-3.5 text-xs text-red-900/90 leading-relaxed border border-red-100/80">
-          Are you sure you want to revoke access for <strong className="font-semibold text-red-950">{user.fullName}</strong> ({user.email})? They will immediately be signed out of this tenant.
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
-          <button onClick={onClose} className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">
-            Cancel
-          </button>
-          <button 
-            onClick={() => {
-              onConfirm()
-              onClose()
-            }}
-            className="h-9 rounded-xl bg-red-600 px-4 text-xs font-semibold text-white shadow-sm shadow-red-600/20 hover:bg-red-700 transition-all active:scale-95"
-          >
-            Yes, Revoke Access
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PermissionsPanel({ addToast }: { addToast: (title: string, message: string, type?: 'success' | 'error') => void }) {
-  const { users, isLoadingUsers, inviteUser, deleteUser } = useUsers();
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [revokingUser, setRevokingUser] = useState<{ id: number; fullName: string; email: string } | null>(null);
-
-  const handleConfirmRevoke = async () => {
-    if (!revokingUser) return;
-    try {
-      await deleteUser(revokingUser.id);
-      addToast('Access Revoked', `Successfully revoked access for ${revokingUser.fullName}.`);
-      setRevokingUser(null);
-    } catch (err) {
-      console.error('Failed to revoke user:', err);
-      addToast('Error', 'Failed to revoke user access.', 'error');
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-[14px] font-semibold">Tenant User Permissions</p>
-        <p className="mt-1 text-[12px] text-[#8994a3]">Control who can view, edit, and administer your SupplySmart workspace.</p>
-      </div>
-      <div className="rounded-xl border border-[#e1e6ec] bg-white p-6 shadow-[0_1px_2px_rgba(23,32,51,0.02)]">
-        <div className="flex items-center justify-between border-b border-[#edf0f3] pb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-[#f0f3f7] text-[#64748b]">
-              <InlineIcon name="users" className="size-4" />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold">Workspace roles</p>
-              <p className="mt-1 text-[11px] text-[#929cab]">{users.length} members have access to this tenant.</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => setIsInviteModalOpen(true)}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b3850]"
-          >
-            + Invite team member
-          </button>
-        </div>
-
-        {isLoadingUsers ? (
-          <p className="py-8 text-xs text-slate-400 text-center">Loading tenant users...</p>
-        ) : users.length === 0 ? (
-          <p className="py-8 text-xs text-slate-400 text-center">No users found.</p>
-        ) : (
-          <div className="flex flex-col divide-y divide-[#edf0f3]">
-            {users.map((u) => {
-              const initials = u.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-              return (
-                <div key={u.id} className="flex items-center gap-3 py-4">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-[#e8edf4] text-[10px] font-bold text-[#61718a]">{initials}</div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-semibold">{u.fullName}</p>
-                    <p className="truncate text-[11px] text-[#99a3b0]">{u.email}</p>
-                  </div>
-                  <span className="rounded-md bg-[#f2f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#687587]">{u.role}</span>
-                  <button 
-                    onClick={() => setRevokingUser({ id: u.id, fullName: u.fullName, email: u.email })}
-                    className="ml-2 rounded-md border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                    title="Revoke access"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <InviteUserModal 
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-        onSubmit={inviteUser}
-        addToast={addToast}
-      />
-
-      <RevokeUserModal 
-        isOpen={!!revokingUser}
-        user={revokingUser}
-        onClose={() => setRevokingUser(null)}
-        onConfirm={handleConfirmRevoke}
-      />
-    </div>
-  );
 }

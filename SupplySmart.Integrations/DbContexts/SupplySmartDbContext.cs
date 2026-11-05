@@ -16,6 +16,7 @@ namespace SupplySmart.Integrations.DbContexts
         private readonly IHttpContextAccessor _httpContextAccessor;
         public DbSet<Organization> Organizations { get; set; }
         public DbSet<User> Users { get; set; }
+        public DbSet<EmailTemplate> EmailTemplates { get; set; }
         public DbSet<Location> Locations { get; set; }
         public DbSet<Room> Rooms { get; set; }
         public DbSet<Container> Containers { get; set; }
@@ -70,6 +71,19 @@ namespace SupplySmart.Integrations.DbContexts
                       .WithMany(o => o.Users)
                       .HasForeignKey(e => e.OrganizationId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<EmailTemplate>(entity =>
+            {
+                entity.ToTable("EmailTemplates");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Trigger).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Subject).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Body).IsRequired().HasMaxLength(8000);
+                entity.Property(e => e.UpdatedBy).IsRequired().HasMaxLength(256);
+                entity.Property(e => e.Revision).IsConcurrencyToken();
+                entity.HasIndex(e => new { e.OrganizationId, e.Trigger }).IsUnique();
+                entity.HasOne(e => e.Organization).WithMany().HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<Location>(entity =>

@@ -5,6 +5,7 @@ export interface IUserService {
     getUsers(): Promise<UserDto[]>;
     inviteUser(dto: InviteUserDto): Promise<UserDto>;
     deleteUser(userId: number): Promise<void>;
+    updateRole(userId: number, role: string): Promise<UserDto>;
 }
 
 export class UserService extends BaseApi implements IUserService {
@@ -24,5 +25,10 @@ export class UserService extends BaseApi implements IUserService {
 
     public deleteUser = async (userId: number): Promise<void> => {
         await this.delete<void>(`api/settings/users/${userId}`);
+    };
+
+    public updateRole = async (userId: number, role: string): Promise<UserDto> => {
+        const response = await this.put<UserDto>(`api/settings/users/${userId}/role`, { role });
+        return response.data;
     };
 }
