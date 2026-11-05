@@ -25,6 +25,7 @@ public class User : IEntityBase
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
     public UserRole Role { get; set; } = UserRole.Staff;
+    public int SessionVersion { get; set; }
 
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedDateUtc { get; set; } = DateTime.UtcNow;

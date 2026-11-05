@@ -1,135 +1,119 @@
-﻿using Microsoft.AspNetCore.Identity;
+using System.ComponentModel.DataAnnotations;
+using System.Data;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using SupplySmart.Integrations.DbContexts;
 using SupplySmart.Integrations.Models.Data;
 using SupplySmart.Integrations.Models.DTO;
-using SupplySmart.Integrations.Repositories;
 
-namespace SupplySmart.Domain.Services
+namespace SupplySmart.Domain.Services;
+
+public interface IUserService
 {
-    public interface IUserService
+    Task<IEnumerable<UserDto>> GetOrganizationUsersAsync(int organizationId);
+    Task<UserDto> InviteUserAsync(int organizationId, InviteUserDto dto, int adminId);
+    Task<UserDto?> UpdateRoleAsync(int organizationId, int targetUserId, string role, int adminId);
+    Task<bool> DeleteUserAsync(int organizationId, int targetUserId, int adminId);
+}
+
+public class UserService(SupplySmartDbContext db, IEmailService emailService) : IUserService
+{
+    public async Task<IEnumerable<UserDto>> GetOrganizationUsersAsync(int organizationId) =>
+        await db.Users.AsNoTracking().Where(u => u.OrganizationId == organizationId)
+            .OrderBy(u => u.FullName).Select(u => new UserDto
+            {
+                Id = u.Id, FullName = u.FullName, Email = u.Email, Role = u.Role.ToString()
+            }).ToListAsync();
+
+    public async Task<UserDto> InviteUserAsync(int organizationId, InviteUserDto dto, int adminId)
     {
-        Task<IEnumerable<UserDto>> GetOrganizationUsersAsync(int organizationId);
-        Task<UserDto> InviteUserAsync(int organizationId, InviteUserDto dto, string adminEmail);
-        Task<bool> DeleteUserAsync(int organizationId, int targetUserId, string adminEmail);
+        var name = dto.FullName?.Trim() ?? "";
+        var email = dto.Email?.Trim().ToLowerInvariant() ?? "";
+        if (name.Length is < 1 or > 150)
+            throw new InvalidOperationException("Enter a name between 1 and 150 characters.");
+        if (email.Length > 256 || !new EmailAddressAttribute().IsValid(email))
+            throw new InvalidOperationException("Enter a valid email address.");
+        var role = ParseRole(dto.Role);
+        // Roll back the account and audit entry if SMTP fails.
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var actor = await RequireAdmin(organizationId, adminId);
+        if (await db.Users.AnyAsync(u => u.Email.ToLower() == email))
+            throw new InvalidOperationException("A user with this email address already exists.");
+        var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+        var user = new User { OrganizationId = organizationId, FullName = name, Email = email, Role = role };
+        user.PasswordHash = new PasswordHasher<User>().HashPassword(user, password);
+        db.Users.Add(user);
+        AddAudit(actor, "User Invited", $"Invited {name} ({email}) as {role}.");
+        await db.SaveChangesAsync();
+        await emailService.SendInviteEmailAsync(email, name, password);
+        await transaction.CommitAsync();
+        return ToDto(user);
     }
 
-    public class UserService : IUserService
+    public async Task<UserDto?> UpdateRoleAsync(int organizationId, int targetUserId, string role, int adminId)
     {
-        private readonly IBaseRepository<User> _userRepo;
-        private readonly IBaseRepository<AuditLog> _auditRepo;
-        private readonly IEmailService _emailService;
-        private readonly IPasswordHasher<User> _passwordHasher = new PasswordHasher<User>();
-
-        public UserService(IBaseRepository<User> userRepo, IBaseRepository<AuditLog> auditRepo, IEmailService emailService)
-        {
-            _userRepo = userRepo;
-            _auditRepo = auditRepo;
-            _emailService = emailService;
-        }
-
-        public async Task<IEnumerable<UserDto>> GetOrganizationUsersAsync(int organizationId)
-        {
-            var users = await _userRepo.GetAllByConditionAsync(u => u.OrganizationId == organizationId);
-            return users.Select(u => new UserDto
-            {
-                Id = u.Id,
-                FullName = u.FullName,
-                Email = u.Email,
-                Role = u.Role.ToString()
-            });
-        }
-
-        public async Task<UserDto> InviteUserAsync(int organizationId, InviteUserDto dto, string adminEmail)
-        {
-            var existingUser = await _userRepo.GetByConditionAsync(u => u.Email == dto.Email);
-            if (existingUser != null)
-            {
-                throw new InvalidOperationException("A user with this email address already exists.");
-            }
-
-            if (!Enum.TryParse<UserRole>(dto.Role, true, out var parsedRole))
-            {
-                parsedRole = UserRole.Manager;
-            }
-
-            // Generate a secure random temporary password
-            var tempPassword = GenerateSecureTempPassword();
-
-            var newUser = new User
-            {
-                OrganizationId = organizationId,
-                FullName = dto.FullName,
-                Email = dto.Email,
-                Role = parsedRole,
-                // Optional: Add a flag to your User entity like IsTemporaryPassword = true if tracking forced resets
-            };
-            newUser.PasswordHash = _passwordHasher.HashPassword(newUser, tempPassword);
-
-            await _userRepo.AddAsync(newUser);
-
-            // Send the email via SMTP (Mailpit locally / SendGrid in production)
-            await _emailService.SendInviteEmailAsync(dto.Email, dto.FullName, tempPassword);
-
-            // Log immutable audit entry
-            await _auditRepo.AddAsync(new AuditLog
-            {
-                OrganizationId = organizationId,
-                Timestamp = DateTime.UtcNow,
-                UserEmail = adminEmail,
-                ActionType = "User Invited",
-                ItemDetails = $"Invited user '{dto.FullName}' ({dto.Email}) with role '{parsedRole}' and generated temp password.",
-                LocationName = "System Administration"
-            });
-
-            return new UserDto
-            {
-                Id = newUser.Id,
-                FullName = newUser.FullName,
-                Email = newUser.Email,
-                Role = newUser.Role.ToString()
-            };
-        }
-
-        private string GenerateSecureTempPassword()
-        {
-            const string chars = "ABCDEFGHJKLMNOPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789!@#$%^&*";
-            var random = new Random();
-            return new string(Enumerable.Repeat(chars, 12).Select(s => s[random.Next(s.Length)]).ToArray());
-        }
-
-        public async Task<bool> DeleteUserAsync(int organizationId, int targetUserId, string adminEmail)
-        {
-            var user = await _userRepo.GetByConditionAsync(u => u.Id == targetUserId && u.OrganizationId == organizationId);
-            if (user == null) return false;
-
-            // 1. Prevent self-deletion
-            if (user.Email.Equals(adminEmail, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException("You cannot delete your own active administrator account.");
-            }
-
-            // 2. Prevent deleting the last Admin in the organization
-            if (user.Role == UserRole.Admin)
-            {
-                var allAdmins = await _userRepo.GetAllByConditionAsync(u => u.OrganizationId == organizationId && u.Role == UserRole.Admin);
-                if (allAdmins.Count() <= 1)
-                {
-                    throw new InvalidOperationException("Cannot delete the last remaining administrator for this organization.");
-                }
-            }
-
-            await _userRepo.DeleteAsync(user.Id);
-
-            await _auditRepo.AddAsync(new AuditLog
-            {
-                OrganizationId = organizationId,
-                Timestamp = DateTime.UtcNow,
-                UserEmail = adminEmail,
-                ActionType = "User Revoked",
-                ItemDetails = $"Revoked access for user '{user.FullName}' ({user.Email})",
-                LocationName = "System Administration"
-            });
-
-            return true;
-        }
+        var parsedRole = ParseRole(role);
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var actor = await RequireAdmin(organizationId, adminId);
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == targetUserId && u.OrganizationId == organizationId);
+        if (user is null) return null;
+        if (user.Role == parsedRole) return ToDto(user);
+        await CheckRemoval(user, adminId);
+        var previousRole = user.Role;
+        user.Role = parsedRole;
+        // Changing back to the old role must not revive an old token.
+        user.SessionVersion++;
+        AddAudit(actor, "User Role Changed", $"Changed {user.FullName} ({user.Email}) from {previousRole} to {parsedRole}.");
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return ToDto(user);
     }
+
+    public async Task<bool> DeleteUserAsync(int organizationId, int targetUserId, int adminId)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var actor = await RequireAdmin(organizationId, adminId);
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == targetUserId && u.OrganizationId == organizationId);
+        if (user is null) return false;
+        await CheckRemoval(user, adminId);
+        db.Users.Remove(user);
+        AddAudit(actor, "User Revoked", $"Revoked access for {user.FullName} ({user.Email}).");
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return true;
+    }
+
+    private async Task<User> RequireAdmin(int organizationId, int adminId) =>
+        await db.Users.SingleOrDefaultAsync(u => u.Id == adminId && u.OrganizationId == organizationId && u.Role == UserRole.Admin)
+            ?? throw new UnauthorizedAccessException("Administrator access is required.");
+
+    private async Task CheckRemoval(User user, int adminId)
+    {
+        if (user.Id == adminId)
+            throw new InvalidOperationException("Another administrator must change your role or remove your account.");
+        if (user.Role == UserRole.Admin &&
+            await db.Users.CountAsync(u => u.OrganizationId == user.OrganizationId && u.Role == UserRole.Admin) <= 1)
+            throw new InvalidOperationException("The organization must keep at least one administrator.");
+    }
+
+    private static UserRole ParseRole(string? role)
+    {
+        // Enum.TryParse also accepts numbers, including undefined enum values.
+        var name = Enum.GetNames<UserRole>().FirstOrDefault(n => string.Equals(n, role, StringComparison.OrdinalIgnoreCase));
+        return name is null
+            ? throw new InvalidOperationException("Choose Admin, Manager, or Staff.")
+            : Enum.Parse<UserRole>(name);
+    }
+
+    private void AddAudit(User actor, string action, string details) => db.AuditLogs.Add(new AuditLog
+    {
+        OrganizationId = actor.OrganizationId, UserEmail = actor.Email, UserName = actor.FullName,
+        ActionType = action, Action = action, ItemDetails = details, LocationName = "System Administration"
+    });
+
+    private static UserDto ToDto(User user) => new()
+    {
+        Id = user.Id, FullName = user.FullName, Email = user.Email, Role = user.Role.ToString()
+    };
 }

@@ -1,100 +1,54 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using System.Net.Mail;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SupplySmart.Domain.Services;
 using SupplySmart.Integrations.Models.DTO;
-using System.Security.Claims;
 
-namespace SupplySmart.Endpoints.Endpoints
+namespace SupplySmart.Endpoints.Endpoints;
+
+public static class UserEndpoints
 {
-    public abstract class UserEndpoints
+    public static Task<IResult> GetUsers(ClaimsPrincipal principal, IUserService service, ILoggerFactory logger) =>
+        Execute(principal, logger, async (orgId, _) => Results.Ok(await service.GetOrganizationUsersAsync(orgId)));
+
+    public static Task<IResult> InviteUser(InviteUserDto dto, ClaimsPrincipal principal, IUserService service, ILoggerFactory logger) =>
+        Execute(principal, logger, async (orgId, adminId) => Results.Ok(await service.InviteUserAsync(orgId, dto, adminId)));
+
+    public static Task<IResult> UpdateRole(int userId, UpdateUserRoleDto dto, ClaimsPrincipal principal, IUserService service, ILoggerFactory logger) =>
+        Execute(principal, logger, async (orgId, adminId) =>
+        {
+            var user = await service.UpdateRoleAsync(orgId, userId, dto.Role, adminId);
+            return user is null ? Results.NotFound() : Results.Ok(user);
+        });
+
+    public static Task<IResult> DeleteUser(int userId, ClaimsPrincipal principal, IUserService service, ILoggerFactory logger) =>
+        Execute(principal, logger, async (orgId, adminId) =>
+            await service.DeleteUserAsync(orgId, userId, adminId) ? Results.Ok() : Results.NotFound());
+
+    private static async Task<IResult> Execute(ClaimsPrincipal principal, ILoggerFactory logger, Func<int, int, Task<IResult>> action)
     {
-        public static async Task<Results<Ok<IEnumerable<UserDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetUsers(
-            ClaimsPrincipal claimsPrincipal,
-            [FromServices] IUserService userService,
-            [FromServices] ILogger<UserEndpoints> logger)
+        if (!int.TryParse(principal.FindFirstValue("OrganizationId"), out var orgId) ||
+            !int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var adminId))
+            return Results.Unauthorized();
+        try { return await action(orgId, adminId); }
+        catch (UnauthorizedAccessException) { return Results.Forbid(); }
+        catch (InvalidOperationException ex) { return Results.BadRequest(new { message = ex.Message }); }
+        catch (SmtpException ex)
         {
-            try
-            {
-                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
-                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
-                {
-                    return TypedResults.Unauthorized();
-                }
-
-                var users = await userService.GetOrganizationUsersAsync(orgId);
-                return TypedResults.Ok(users);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error fetching tenant users.");
-                return TypedResults.Problem("An unexpected error occurred.");
-            }
+            logger.CreateLogger("UserPermissions").LogError(ex, "Invitation email delivery failed.");
+            return Results.Json(new { message = "The invitation email could not be sent. No account was added. Try again later." }, statusCode: 503);
         }
-
-        public static async Task<Results<Ok<UserDto>, BadRequest<object>, UnauthorizedHttpResult, ProblemHttpResult>> InviteUser(
-            [FromBody] InviteUserDto dto,
-            ClaimsPrincipal claimsPrincipal,
-            [FromServices] IUserService userService,
-            [FromServices] ILogger<UserEndpoints> logger)
+        catch (DbUpdateException ex)
         {
-            try
-            {
-                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
-                var adminEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "admin@supplysmart.io";
-
-                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
-                {
-                    return TypedResults.Unauthorized();
-                }
-
-                var newUser = await userService.InviteUserAsync(orgId, dto, adminEmail);
-                return TypedResults.Ok(newUser);
-            }
-            catch (InvalidOperationException ex)
-            {
-                logger.LogWarning(ex, "User invitation failed: {Message}", ex.Message);
-                return TypedResults.BadRequest<object>(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Unexpected error inviting user.");
-                return TypedResults.Problem("An unexpected error occurred.");
-            }
+            logger.CreateLogger("UserPermissions").LogError(ex, "User update conflicted with another change.");
+            return Results.Conflict(new { message = "This change could not be saved. Refresh the user list and try again." });
         }
-
-        public static async Task<Results<Ok, BadRequest<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> DeleteUser(
-            int userId,
-            ClaimsPrincipal claimsPrincipal,
-            [FromServices] IUserService userService,
-            [FromServices] ILogger<UserEndpoints> logger)
+        catch (Exception ex)
         {
-            try
-            {
-                var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
-                var adminEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "admin@supplysmart.io";
-
-                if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
-                {
-                    return TypedResults.Unauthorized();
-                }
-
-                var success = await userService.DeleteUserAsync(orgId, userId, adminEmail);
-                if (!success) return TypedResults.NotFound();
-
-                return TypedResults.Ok();
-            }
-            catch (InvalidOperationException ex)
-            {
-                logger.LogWarning(ex, "User deletion blocked: {Message}", ex.Message);
-                return TypedResults.BadRequest<object>(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error revoking user access.");
-                return TypedResults.Problem("An unexpected error occurred.");
-            }
+            logger.CreateLogger("UserPermissions").LogError(ex, "User permissions request failed.");
+            return Results.Json(new { message = "The request could not be completed. Refresh and try again." }, statusCode: 500);
         }
     }
 }

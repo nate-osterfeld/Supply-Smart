@@ -6,6 +6,7 @@ using SupplySmart.Endpoints.Configuration;
 using SupplySmart.Integrations.DbContexts;
 using SupplySmart.Integrations.Repositories;
 using System.Text;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +45,27 @@ builder.Services.AddAuthentication(options =>
 {
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var principal = context.Principal!;
+            // Tokens issued before this migration have version zero.
+            var versionClaim = principal.FindFirstValue("session_version") ?? "0";
+            if (!int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ||
+                !int.TryParse(principal.FindFirstValue("OrganizationId"), out var orgId) ||
+                !int.TryParse(versionClaim, out var version))
+            {
+                context.Fail("Invalid session.");
+                return;
+            }
+            var db = context.HttpContext.RequestServices.GetRequiredService<SupplySmartDbContext>();
+            var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, context.HttpContext.RequestAborted);
+            if (user is null || user.OrganizationId != orgId || user.SessionVersion != version ||
+                user.Role.ToString() != principal.FindFirstValue(ClaimTypes.Role))
+                context.Fail("This session is no longer active. Sign in again.");
+        }
+    };
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
@@ -82,3 +104,5 @@ app.MapCatalogEndpoints();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+public partial class Program { }

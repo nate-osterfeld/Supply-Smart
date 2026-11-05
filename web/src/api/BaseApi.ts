@@ -13,7 +13,7 @@ export class BaseApi {
 
     public constructor(usesAuth: boolean = true) {
         this.usesAuth = usesAuth;
-        this.baseUrl = import.meta.env.VITE_BASEURL || '';
+        this.baseUrl = (import.meta.env.VITE_BASEURL || '').replace(/\/+$/, '');
         
         this.api = axios.create({
             headers: {
@@ -52,24 +52,28 @@ export class BaseApi {
     }
 
     protected get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.get<T>(`${this.baseUrl}/${url}`, config);
+        return this.api.get<T>(this.url(url), config);
     }
 
     protected post<T>(url: string, data?: object | string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.post<T>(`${this.baseUrl}/${url}`, data, config);
+        return this.api.post<T>(this.url(url), data, config);
     }
 
     protected put<T>(url: string, data?: object, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.put<T>(`${this.baseUrl}${url}`, data, config);
+        return this.api.put<T>(this.url(url), data, config);
     }
 
     protected delete<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.delete<T>(`${this.baseUrl}${url}`, config);
+        return this.api.delete<T>(this.url(url), config);
+    }
+
+    private url(path: string): string {
+        return `${this.baseUrl}/${path.replace(/^\/+/, '')}`;
     }
 
     private getErrorMsg(err: unknown): string {
         if (axios.isAxiosError(err)) {
-            const axiosErr = err as AxiosError<any>;
+            const axiosErr = err as AxiosError<unknown>;
             if (axiosErr.response?.data && typeof axiosErr.response.data === 'object' && 'message' in axiosErr.response.data) {
                 return (axiosErr.response.data as { message: string }).message;
             }
