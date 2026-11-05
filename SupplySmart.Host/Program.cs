@@ -7,6 +7,7 @@ using SupplySmart.Integrations.DbContexts;
 using SupplySmart.Integrations.Repositories;
 using System.Text;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +27,17 @@ builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(SupplySmartReposito
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+        await context.HttpContext.Response.WriteAsJsonAsync(new { message = "Wait a minute before sending another test email." }, cancellationToken);
+    options.AddPolicy("email-template-tests", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 2, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 builder.Services.AddScoped<ITenantSeederService, TenantSeederService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
@@ -88,6 +100,7 @@ app.UseHttpsRedirection();
 // Enable Authentication & Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Enable serving static files from wwwroot (React frontend)
 app.UseDefaultFiles();
@@ -96,6 +109,7 @@ app.UseStaticFiles();
 // Map API endpoints
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapEmailTemplateEndpoints();
 app.MapDashboardEndpoints();
 app.MapLocationEndpoints();
 app.MapCatalogEndpoints();

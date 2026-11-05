@@ -93,6 +93,13 @@ public sealed class FakeEmail : IEmailService
 {
     public bool Fail { get; set; }
     public List<(string Email, string Password)> Invitations { get; } = [];
+    public List<(string Email, string Subject, string Body)> Alerts { get; } = [];
+    public Task SendAlertEmailAsync(string toEmail, string subject, string body)
+    {
+        if (Fail) throw new SmtpException("Simulated delivery failure.");
+        Alerts.Add((toEmail, subject, body));
+        return Task.CompletedTask;
+    }
     public Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
     {
         if (Fail) throw new SmtpException("Simulated delivery failure.");

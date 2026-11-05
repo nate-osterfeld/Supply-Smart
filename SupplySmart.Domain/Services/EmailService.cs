@@ -7,6 +7,7 @@ namespace SupplySmart.Domain.Services;
 public interface IEmailService
 {
     Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword);
+    Task SendAlertEmailAsync(string toEmail, string subject, string body);
 }
 
 public class EmailService : IEmailService
@@ -16,6 +17,27 @@ public class EmailService : IEmailService
     public EmailService(IConfiguration configuration)
     {
         _configuration = configuration;
+    }
+
+    public async Task SendAlertEmailAsync(string toEmail, string subject, string body)
+    {
+        using var client = new SmtpClient(
+            _configuration["EmailSettings:Host"] ?? "localhost",
+            int.Parse(_configuration["EmailSettings:Port"] ?? "1025"));
+        var apiKey = _configuration["EmailSettings:ApiKey"];
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            client.Credentials = new NetworkCredential(_configuration["EmailSettings:Username"] ?? "apikey", apiKey);
+            client.EnableSsl = true;
+        }
+        using var message = new MailMessage
+        {
+            From = new MailAddress(_configuration["EmailSettings:SenderEmail"] ?? "no-reply@supplysmart.io",
+                _configuration["EmailSettings:SenderName"] ?? "SupplySmart"),
+            Subject = subject, Body = body, IsBodyHtml = false
+        };
+        message.To.Add(toEmail);
+        await client.SendMailAsync(message);
     }
 
     public async Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)

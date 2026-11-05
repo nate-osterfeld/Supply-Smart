@@ -111,6 +111,52 @@ namespace SupplySmart.Integrations.Migrations
                     b.ToTable("Containers", (string)null);
                 });
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.EmailTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Trigger")
+                        .IsUnique();
+
+                    b.ToTable("EmailTemplates", (string)null);
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventoryItem", b =>
                 {
                     b.Property<int>("Id")
@@ -377,6 +423,17 @@ namespace SupplySmart.Integrations.Migrations
                     b.Navigation("ParentContainer");
 
                     b.Navigation("Room");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.EmailTemplate", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventoryItem", b =>

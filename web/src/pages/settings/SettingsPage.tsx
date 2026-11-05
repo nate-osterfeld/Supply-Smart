@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useStorage } from '../../hooks/useStorage'
 import PermissionsPanel from './PermissionsPanel'
+import EmailTemplatesPanel from './EmailTemplatesPanel'
 
 type IconProps = { className?: string; strokeWidth?: number }
 type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x' | 'check'
@@ -151,12 +152,10 @@ function InlineIcon({ name, className, strokeWidth = 1.8 }: IconProps & { name: 
   )
 }
 
-const ChevronDown = (props: IconProps) => <InlineIcon name="chevron-down" {...props} />
 const Mail = (props: IconProps) => <InlineIcon name="mail" {...props} />
+const ChevronDown = (props: IconProps) => <InlineIcon name="chevron-down" {...props} />
 const MapPin = (props: IconProps) => <InlineIcon name="map-pin" {...props} />
 const Pencil = (props: IconProps) => <InlineIcon name="pencil" {...props} />
-const Save = (props: IconProps) => <InlineIcon name="save" {...props} />
-const Send = (props: IconProps) => <InlineIcon name="send" {...props} />
 const ShieldCheck = (props: IconProps) => <InlineIcon name="shield" {...props} />
 const Sparkles = (props: IconProps) => <InlineIcon name="sparkles" {...props} />
 const Trash2 = (props: IconProps) => <InlineIcon name="trash" {...props} />
@@ -169,14 +168,6 @@ const settingsTabs = [
   { id: 'locations', label: 'Locations & Warehouses', icon: MapPin },
 ]
 
-const template = `# 🚨 SupplySmart Low Stock Alert: {{item_name}}
-
-**Location:** {{supply_room}}  
-**Current Stock:** {{current_quantity}}  
-**Minimum Threshold:** {{minimum_threshold}}
-
-Please restock this item at your earliest convenience.`
-
 export type ToastMessage = {
   id: number;
   type: 'success' | 'error';
@@ -186,9 +177,7 @@ export type ToastMessage = {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('billing')
-  const [alertTrigger, setAlertTrigger] = useState('Item Reaches Low-Stock Limit')
-  const [templateValue, setTemplateValue] = useState(template)
-  const [saved, setSaved] = useState(false)
+  const [emailDirty, setEmailDirty] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
   const addToast = (title: string, message: string, type: 'success' | 'error' = 'success') => {
@@ -239,11 +228,6 @@ export default function SettingsPage() {
     }
   }
 
-  const saveChanges = () => {
-    setSaved(true)
-    addToast('Templates Saved', 'Low-stock email templates updated successfully.')
-    window.setTimeout(() => setSaved(false), 2200)
-  }
 
   return (
     <div className="min-h-screen bg-[#f7f8fa] text-[#172033] pb-12">
@@ -267,7 +251,13 @@ export default function SettingsPage() {
             {settingsTabs.map(({ id, label, icon: Icon }) => (
               <button 
                 key={id} 
-                onClick={() => setActiveTab(id)} 
+                onClick={() => {
+                  if (id === activeTab) return
+                  if (!emailDirty || window.confirm('Discard your unsaved email template changes?')) {
+                    setActiveTab(id)
+                    setEmailDirty(false)
+                  }
+                }}
                 className={`flex items-start gap-3 rounded-lg px-3 py-3 text-left text-[13px] leading-5 transition-all ${
                   activeTab === id 
                     ? 'bg-white font-semibold text-[#172033] shadow-[0_1px_3px_rgba(23,32,51,0.08)] ring-1 ring-[#e6e9ee]' 
@@ -288,7 +278,7 @@ export default function SettingsPage() {
 
         <section className="min-w-0 flex-1 pb-12">
           {activeTab === 'billing' && <BillingPanel />}
-          {activeTab === 'email' && <EmailPanel alertTrigger={alertTrigger} setAlertTrigger={setAlertTrigger} templateValue={templateValue} setTemplateValue={setTemplateValue} saveChanges={saveChanges} saved={saved} />}
+          {activeTab === 'email' && <EmailTemplatesPanel addToast={addToast} onDirtyChange={setEmailDirty} />}
           {activeTab === 'permissions' && <PermissionsPanel addToast={addToast} />}
           {activeTab === 'locations' && (
             <LocationsPanel 
@@ -563,71 +553,6 @@ function BillingPanel() {
         <button className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#415a7c] px-4 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#344d70]">
           Upgrade to Enterprise <ChevronDown className="size-3.5 -rotate-90" />
         </button>
-      </div>
-    </div>
-  )
-}
-
-function EmailPanel({ alertTrigger, setAlertTrigger, templateValue, setTemplateValue, saveChanges, saved }: { alertTrigger: string; setAlertTrigger: (value: string) => void; templateValue: string; setTemplateValue: (value: string) => void; saveChanges: () => void; saved: boolean }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-[14px] font-semibold">Low-Stock Email Templates</p>
-        <p className="mt-1 text-[12px] text-[#8994a3]">Customize the markdown text blocks auto-fired to phone networks during threshold triggers.</p>
-      </div>
-      <div className="rounded-xl border border-[#e1e6ec] bg-white shadow-[0_1px_2px_rgba(23,32,51,0.02)]">
-        <div className="border-b border-[#edf0f3] p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f0f3f7] text-[#64748b]">
-              <InlineIcon name="bell" className="size-4" />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold">Alert notification content</p>
-              <p className="mt-1 text-[11px] leading-5 text-[#929cab]">Use the available variables to personalize notifications sent to your team.</p>
-            </div>
-          </div>
-          <label className="mt-5 block text-[11px] font-semibold text-[#536174]" htmlFor="trigger">Alert Event Trigger</label>
-          <div className="relative mt-2">
-            <select 
-              id="trigger" 
-              value={alertTrigger} 
-              onChange={(event) => setAlertTrigger(event.target.value)} 
-              className="h-10 w-full appearance-none rounded-lg border border-[#dfe4ea] bg-white px-3 text-[12px] text-[#344154] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]"
-            >
-              <option>Item Reaches Low-Stock Limit</option>
-              <option>Item Falls Out of Stock</option>
-              <option>Weekly Inventory Digest</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-3 size-4 text-[#8994a3]" />
-          </div>
-        </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-semibold text-[#536174]" htmlFor="template">Message template</label>
-            <span className="text-[10px] text-[#a1aab7]">Markdown supported</span>
-          </div>
-          <textarea 
-            id="template" 
-            value={templateValue} 
-            onChange={(event) => setTemplateValue(event.target.value)} 
-            className="mt-2 min-h-[245px] w-full resize-y rounded-lg border border-[#dfe4ea] bg-[#fbfcfd] p-4 font-mono text-[12px] leading-6 text-[#485568] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]" 
-            spellCheck={false} 
-          />
-          <div className="mt-5 flex flex-col-reverse gap-3 border-t border-[#edf0f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] text-[#9aa4b2]">Last updated by Jordan Davis · Just now</p>
-            <div className="flex gap-2">
-              <button className="flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#536174] transition-colors hover:bg-[#f8f9fb]">
-                <Send className="size-3.5" />Send Test Alert
-              </button>
-              <button 
-                onClick={saveChanges} 
-                className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b374b]"
-              >
-                <Save className="size-3.5" />{saved ? 'Changes Saved' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
