@@ -6,6 +6,8 @@ export * from './InviteUserDto.ts';
 export * from './SubscriptionDetailsDto.ts';
 export * from './SubscriptionCheckoutResponseDto.ts';
 export * from './UpdateSubscriptionRequestDto.ts';
+export * from './SubscriptionPortalResponseDto.ts';
+export * from './VerifySessionRequestsDto.ts';
 export * from './LocationDto.ts';
 export * from './CreateLocationDto.ts';
 export * from './AuditLogEntryDto.ts';

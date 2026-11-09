@@ -8,4 +8,5 @@ export interface SubscriptionDetailsDto {
     usedItemsCount: number;
     maxItemsQuota: number;
     isStripeConfigured: boolean;
+    stripeCustomerId?: string | null;
 }
