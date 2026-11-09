@@ -49,6 +49,7 @@ export function useStorage(containerId?: number) {
             service.createRoom(locationId, name),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },
     });
 
@@ -64,6 +65,7 @@ export function useStorage(containerId?: number) {
         mutationFn: (roomId: number) => service.deleteRoom(roomId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
+            queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },
     });
 
@@ -99,6 +101,7 @@ export function useStorage(containerId?: number) {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
             queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
             queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
+            queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },
     });
 
@@ -125,6 +128,7 @@ export function useStorage(containerId?: number) {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
             queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
             queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
+            queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },
     });
 
@@ -135,6 +139,7 @@ export function useStorage(containerId?: number) {
             queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
             queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
             queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
+            queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },
     });
 

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useStorage } from '../../hooks/useStorage'
 import { useUsers } from '../../hooks/useUsers'
+import { useSubscription } from '../../hooks/useSubscription'
 
 type IconProps = { className?: string; strokeWidth?: number }
 type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x' | 'check'
@@ -287,7 +288,7 @@ export default function SettingsPage() {
         </aside>
 
         <section className="min-w-0 flex-1 pb-12">
-          {activeTab === 'billing' && <BillingPanel />}
+          {activeTab === 'billing' && <BillingPanel addToast={addToast} />}
           {activeTab === 'email' && <EmailPanel alertTrigger={alertTrigger} setAlertTrigger={setAlertTrigger} templateValue={templateValue} setTemplateValue={setTemplateValue} saveChanges={saveChanges} saved={saved} />}
           {activeTab === 'permissions' && <PermissionsPanel addToast={addToast} />}
           {activeTab === 'locations' && (
@@ -520,50 +521,181 @@ function DeleteConfirmationModal({
   )
 }
 
-function BillingPanel() {
+function BillingPanel({ addToast }: { addToast: (title: string, message: string, type?: 'success' | 'error') => void }) {
+  const { subscription, isLoadingSubscription, updatePlan, isUpdatingPlan } = useSubscription();
+  const [selectedPlan, setSelectedPlan] = useState<string>('Professional');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  if (isLoadingSubscription || !subscription) {
+    return <div className="p-8 text-xs text-slate-400">Loading subscription details...</div>;
+  }
+
+  const roomsPercent = subscription.maxRoomsQuota === 9999 
+    ? 10 
+    : Math.min(100, (subscription.usedRoomsCount / subscription.maxRoomsQuota) * 100);
+
+  const itemsPercent = subscription.maxItemsQuota === 999999 
+    ? 10 
+    : Math.min(100, (subscription.usedItemsCount / subscription.maxItemsQuota) * 100);
+
+  const handleUpgradeSubmit = async () => {
+    try {
+      setErrorMessage(null);
+      await updatePlan({ targetPlan: selectedPlan });
+      setIsModalOpen(false);
+      addToast('Subscription Updated', `Successfully switched workspace to the ${selectedPlan} Plan.`);
+    } catch (err: any) {
+      const msg = err?.response?.data || 'Failed to update subscription plan.';
+      setErrorMessage(msg);
+      addToast('Error', msg, 'error');
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-[14px] font-semibold">SaaS Subscription &amp; Billing</p>
-        <p className="mt-1 text-[12px] text-[#8994a3]">Review your current plan and manage workspace capacity.</p>
+        <p className="text-[14px] font-semibold text-slate-900">SaaS Subscription &amp; Billing</p>
+        <p className="mt-1 text-[12px] text-slate-500">Review your current plan and manage workspace capacity quotas.</p>
       </div>
+
       <div className="overflow-hidden rounded-xl border border-[#e1e6ec] bg-white shadow-[0_1px_2px_rgba(23,32,51,0.02)]">
         <div className="flex flex-col gap-5 border-b border-[#edf0f3] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#9aa4b2]">Current plan</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Current plan</p>
             <div className="mt-2 flex items-center gap-3">
-              <h1 className="text-[19px] font-bold tracking-[-0.03em]">Professional Plan</h1>
-              <span className="rounded-md bg-[#e9f1ff] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5577a8]">Active</span>
+              <h1 className="text-[19px] font-bold tracking-[-0.03em] text-slate-950">
+                {subscription.planName} Plan
+              </h1>
+              <span className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-700">
+                {subscription.status}
+              </span>
             </div>
-            <p className="mt-2 text-[12px] text-[#8b96a5]">Billed annually · Renews on October 12, 2026</p>
+            <p className="mt-2 text-[12px] text-slate-500">
+              Billed {subscription.billingInterval.toLowerCase()} · Renews on {new Date(subscription.renewalDateUtc).toLocaleDateString()}
+            </p>
           </div>
-          <button className="h-9 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#46546a] transition-colors hover:bg-[#f8f9fb]">
-            Manage billing
+          <button 
+            onClick={() => { setSelectedPlan(subscription.planName); setIsModalOpen(true); }}
+            className="h-9 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#46546a] transition-colors hover:bg-[#f8f9fb]"
+          >
+            Change / Upgrade Plan
           </button>
         </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-[13px] font-semibold">Active Supply Rooms</p>
-              <p className="mt-1 text-[11px] text-[#98a2b0]">Containers allocation</p>
+
+        <div className="grid gap-6 p-5 sm:p-6 md:grid-cols-2">
+          <div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[13px] font-semibold text-slate-800">Active Supply Rooms</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">Spatial room allocation</p>
+              </div>
+              <p className="text-[13px] font-semibold text-slate-900">
+                {subscription.usedRoomsCount} <span className="font-normal text-slate-400">/ {subscription.maxRoomsQuota === 9999 ? 'Unlimited' : subscription.maxRoomsQuota} Used</span>
+              </p>
             </div>
-            <p className="text-[13px] font-semibold text-[#344154]">8 <span className="font-normal text-[#9ca5b1]">/ 15 Rooms Used</span></p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf0f3]">
+              <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${roomsPercent}%` }} />
+            </div>
+            <p className="mt-2.5 text-[11px] text-[#9aa4b2]">
+              {subscription.maxRoomsQuota === 9999 ? 'Unlimited rooms provisioned' : `${subscription.maxRoomsQuota - subscription.usedRoomsCount} rooms remaining on plan`}
+            </p>
           </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#edf0f3]">
-            <div className="h-full w-[53.33%] rounded-full bg-[#607697]" />
+
+          <div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[13px] font-semibold text-slate-800">Inventory Items</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">Catalog volume limit</p>
+              </div>
+              <p className="text-[13px] font-semibold text-slate-900">
+                {subscription.usedItemsCount} <span className="font-normal text-slate-400">/ {subscription.maxItemsQuota === 999999 ? 'Unlimited' : subscription.maxItemsQuota} Used</span>
+              </p>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf0f3]">
+              <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${itemsPercent}%` }} />
+            </div>
+            <p className="mt-2.5 text-[11px] text-[#9aa4b2]">
+              {subscription.maxItemsQuota === 999999 ? 'Unlimited catalog items' : `${subscription.maxItemsQuota - subscription.usedItemsCount} items remaining on plan`}
+            </p>
           </div>
-          <p className="mt-2.5 text-[11px] text-[#9aa4b2]">7 rooms remaining on your current plan</p>
         </div>
       </div>
-      <div className="flex flex-col gap-3 rounded-xl border border-[#dbe6f6] bg-[#f2f6fc] p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div>
-          <p className="text-[13px] font-semibold text-[#344d70]">Need infinite rooms and custom data exporting?</p>
-          <p className="mt-1 text-[11px] text-[#7790b4]">Unlock advanced controls and unlimited workspace capacity.</p>
+
+      {subscription.planName !== 'Enterprise' && (
+        <div className="flex flex-col gap-3 rounded-xl border border-[#dbe6f6] bg-[#f2f6fc] p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div>
+            <p className="text-[13px] font-semibold text-[#344d70]">Need infinite rooms and custom data exporting?</p>
+            <p className="mt-1 text-[11px] text-[#7790b4]">Unlock advanced controls, priority compliance reporting, and unlimited workspace capacity.</p>
+          </div>
+          <button 
+            onClick={() => { setSelectedPlan('Enterprise'); setIsModalOpen(true); }}
+            className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#415a7c] px-4 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#344d70]"
+          >
+            Upgrade to Enterprise <ChevronDown className="size-3.5 -rotate-90" />
+          </button>
         </div>
-        <button className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#415a7c] px-4 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#344d70]">
-          Upgrade to Enterprise <ChevronDown className="size-3.5 -rotate-90" />
-        </button>
-      </div>
+      )}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 ring-1 ring-slate-900/5">
+            <h2 className="text-[15px] font-bold text-slate-950">Select Subscription Tier</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Choose the plan that best fits your needs.</p>
+
+            {errorMessage && (
+              <div className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700 border border-rose-100">
+                {errorMessage}
+              </div>
+            )}
+
+            <div className="mt-5 space-y-3">
+              {['Free', 'Starter', 'Professional', 'Enterprise'].map((plan) => (
+                <label 
+                  key={plan} 
+                  className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${selectedPlan === plan ? 'border-blue-600 bg-blue-50/40 ring-1 ring-blue-600' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="radio" 
+                      name="tier" 
+                      value={plan} 
+                      checked={selectedPlan === plan} 
+                      onChange={() => setSelectedPlan(plan)}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <p className="text-[13px] font-semibold text-slate-900">{plan} Plan</p>
+                      <p className="text-[11px] text-slate-500">
+                        {plan === 'Free' && '2 Rooms · 50 Items ($0/yr)'}
+                        {plan === 'Starter' && '5 Rooms · 250 Items ($490/yr)'}
+                        {plan === 'Professional' && '15 Rooms · 1,500 Items ($1,490/yr)'}
+                        {plan === 'Enterprise' && 'Unlimited Rooms & Items ($3,990/yr)'}
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="h-9 rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleUpgradeSubmit}
+                disabled={isUpdatingPlan}
+                className="h-9 rounded-xl bg-slate-950 px-4 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all"
+              >
+                {isUpdatingPlan ? 'Updating...' : 'Confirm Plan Change'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
