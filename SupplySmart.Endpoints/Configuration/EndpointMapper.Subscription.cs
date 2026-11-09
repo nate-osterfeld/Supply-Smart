@@ -23,11 +23,36 @@ public static partial class EndpointMapper
 
         subscriptionEndpoints.MapPost("/checkout", SubscriptionEndpoints.CheckoutSubscription)
             .WithName("CheckoutSubscription")
-            .WithDescription("Upgrades or changes the tenant's SaaS subscription tier and updates spatial quotas.")
+            .WithDescription("Upgrades or changes the tenant's SaaS subscription tier via Stripe Checkout.")
             .Produces<SubscriptionCheckoutResponseDto>(StatusCodes.Status200OK)
             .Produces<string>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        subscriptionEndpoints.MapPost("/portal", SubscriptionEndpoints.CreatePortal)
+            .WithName("CreateCustomerPortal")
+            .WithDescription("Creates a Stripe Customer Portal session for self-service invoice and payment management.")
+            .Produces<SubscriptionPortalResponseDto>(StatusCodes.Status200OK)
+            .Produces<string>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        subscriptionEndpoints.MapPost("/verify-session", SubscriptionEndpoints.VerifySession)
+            .WithName("VerifySubscriptionSession")
+            .WithDescription("Verifies a completed Stripe Checkout session and immediately syncs the organization quota.")
+            .Produces<SubscriptionDetailsDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        // Public webhook endpoint (Stripe calls this directly, no tenant authorization cookie needed)
+        app.MapPost("/api/stripe/webhook", SubscriptionEndpoints.HandleWebhook)
+            .WithTags("SaaS Subscription & Billing")
+            .WithName("StripeWebhook")
+            .WithDescription("Receives asynchronous webhook events from Stripe.")
+            .AllowAnonymous()
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest);
     }
 }

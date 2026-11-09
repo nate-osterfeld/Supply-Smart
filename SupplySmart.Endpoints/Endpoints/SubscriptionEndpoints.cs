@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -72,6 +73,84 @@ public abstract class SubscriptionEndpoints
         {
             logger.LogError(ex, "Error updating subscription tier.");
             return TypedResults.Problem("An unexpected error occurred while updating your subscription.");
+        }
+    }
+
+    public static async Task<Results<Ok<SubscriptionPortalResponseDto>, BadRequest<string>, UnauthorizedHttpResult, ForbidHttpResult, ProblemHttpResult>> CreatePortal(
+        ClaimsPrincipal claimsPrincipal,
+        ISubscriptionService subscriptionService,
+        ILogger<SubscriptionEndpoints> logger)
+    {
+        try
+        {
+            var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+            if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            var roleClaim = claimsPrincipal.FindFirst(ClaimTypes.Role)?.Value;
+            if (!string.Equals(roleClaim, "Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                return TypedResults.Forbid();
+            }
+
+            var portalResponse = await subscriptionService.CreateCustomerPortalSessionAsync(orgId);
+            return TypedResults.Ok(portalResponse);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return TypedResults.BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating Stripe Customer Portal session.");
+            return TypedResults.Problem("An unexpected error occurred while opening the billing portal.");
+        }
+    }
+
+    public static async Task<Results<Ok<SubscriptionDetailsDto>, UnauthorizedHttpResult, ProblemHttpResult>> VerifySession(
+        ClaimsPrincipal claimsPrincipal,
+        ISubscriptionService subscriptionService,
+        ILogger<SubscriptionEndpoints> logger,
+        [FromBody] VerifySessionRequestDto dto)
+    {
+        try
+        {
+            var orgIdClaim = claimsPrincipal.FindFirst("OrganizationId")?.Value;
+            if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId))
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            var details = await subscriptionService.VerifyAndSyncSessionAsync(orgId, dto.SessionId);
+            return TypedResults.Ok(details);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error verifying Stripe session.");
+            return TypedResults.Problem("An unexpected error occurred while verifying the payment session.");
+        }
+    }
+
+    public static async Task<IResult> HandleWebhook(
+        HttpRequest request,
+        ISubscriptionService subscriptionService,
+        ILogger<SubscriptionEndpoints> logger)
+    {
+        try
+        {
+            using var reader = new StreamReader(request.Body);
+            var json = await reader.ReadToEndAsync();
+            var signatureHeader = request.Headers["Stripe-Signature"].ToString();
+
+            await subscriptionService.HandleStripeWebhookAsync(json, signatureHeader);
+            return Results.Ok();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error processing Stripe webhook.");
+            return Results.BadRequest($"Webhook error: {ex.Message}");
         }
     }
 }
