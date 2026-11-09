@@ -49,7 +49,16 @@ namespace SupplySmart.Domain.Services
             }
 
             // 1. Create Organization Tenant
-            var organization = new Organization { Name = dto.OrganizationName };
+            var organization = new Organization
+            {
+                Name = dto.OrganizationName,
+                SubscriptionPlan = "Free",
+                SubscriptionStatus = "Active",
+                BillingInterval = "Annual",
+                MaxRoomsQuota = 2,
+                MaxItemsQuota = 50,
+                RenewalDateUtc = DateTime.UtcNow.AddYears(1)
+            };
             await _orgRepo.AddAsync(organization);
 
             // 2. Automatically seed default primary location

@@ -233,16 +233,42 @@ namespace SupplySmart.Domain.Services
 
         public async Task<RoomDto> CreateRoomAsync(int organizationId, int locationId, string roomName)
         {
+            // 1. Verify location scope belongs to the tenant
             var location = await _context.Locations
                 .FirstOrDefaultAsync(l => l.Id == locationId && l.OrganizationId == organizationId);
 
             if (location == null) throw new UnauthorizedAccessException("Invalid location scope.");
 
+            // 2. Fetch the organization to check the max rooms quota
+            var org = await _context.Organizations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == organizationId);
+
+            if (org == null) throw new InvalidOperationException("Organization not found.");
+
+            // If MaxRoomsQuota is 0 or uninitialized, default to Free tier limit (2)
+            var maxRoomsQuota = org.MaxRoomsQuota > 0 ? org.MaxRoomsQuota : 2;
+            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
+
+            // 3. Count current active rooms for this tenant
+            var currentRoomsCount = await _context.Rooms
+                .CountAsync(r => r.OrganizationId == organizationId);
+
+            // 4. Enforce MaxRoomsQuota limit
+            if (currentRoomsCount >= maxRoomsQuota)
+            {
+                throw new InvalidOperationException(
+                    $"You have reached the maximum room limit ({maxRoomsQuota} rooms) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to provision additional rooms.");
+            }
+
+            // 5. Proceed with room creation
             var room = new Room
             {
                 Name = roomName,
                 LocationId = locationId,
-                OrganizationId = organizationId
+                OrganizationId = organizationId,
+                Kind = "Room",
+                Detail = string.Empty
             };
 
             _context.Rooms.Add(room);
@@ -377,13 +403,35 @@ namespace SupplySmart.Domain.Services
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
+            // 1. Fetch organization to check item quota limits
+            var org = await _context.Organizations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == organizationId);
+
+            if (org == null) throw new InvalidOperationException("Organization not found.");
+
+            // Fallback safeguard. Default to Free tier limit (50)
+            var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
+            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
+
+            // 2. Count current inventory items for this tenant
+            var currentItemsCount = await _context.InventoryItems
+                .CountAsync(i => i.OrganizationId == organizationId);
+
+            // 3. Enforce MaxItemsQuota limit
+            if (currentItemsCount >= maxItemsQuota)
+            {
+                throw new InvalidOperationException(
+                    $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
+            }
+
             var item = new InventoryItem
             {
                 OrganizationId = organizationId,
                 ContainerId = containerId,
                 Name = dto.Name,
                 Sku = dto.Sku,
-                Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General", // <-- Add this
+                Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General",
                 LotNumber = dto.LotNumber,
                 Type = (ItemType)dto.Type,
                 ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate,
