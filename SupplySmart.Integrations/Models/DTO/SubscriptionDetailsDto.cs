@@ -15,4 +15,5 @@ public class SubscriptionDetailsDto
     public int UsedItemsCount { get; set; }
     public int MaxItemsQuota { get; set; }
     public bool IsStripeConfigured { get; set; }
+    public string? StripeCustomerId { get; set; }
 }
