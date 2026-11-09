@@ -15,7 +15,28 @@ export function useSubscription() {
 
     const updatePlanMutation = useMutation({
         mutationFn: (dto: UpdateSubscriptionRequestDto) => service.updateSubscriptionPlan(dto),
-        onSuccess: () => {
+        onSuccess: (data) => {
+            if (!data.updatedImmediately && data.checkoutUrl) {
+                window.location.href = data.checkoutUrl;
+                return;
+            }
+            queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
+        },
+    });
+
+    const openPortalMutation = useMutation({
+        mutationFn: () => service.createPortalSession(),
+        onSuccess: (data) => {
+            if (data.portalUrl) {
+                window.location.href = data.portalUrl;
+            }
+        },
+    });
+
+    const verifySessionMutation = useMutation({
+        mutationFn: (sessionId: string) => service.verifySession({ sessionId }),
+        onSuccess: (updatedDetails) => {
+            queryClient.setQueryData(['subscription-details'], updatedDetails);
             queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },
     });
@@ -26,5 +47,9 @@ export function useSubscription() {
         isErrorSubscription: subscriptionQuery.isError,
         updatePlan: updatePlanMutation.mutateAsync,
         isUpdatingPlan: updatePlanMutation.isPending,
+        openCustomerPortal: openPortalMutation.mutateAsync,
+        isOpeningPortal: openPortalMutation.isPending,
+        verifySession: verifySessionMutation.mutateAsync,
+        isVerifyingSession: verifySessionMutation.isPending,
     };
 }

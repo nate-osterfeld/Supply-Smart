@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStorage } from '../../hooks/useStorage'
 import { useUsers } from '../../hooks/useUsers'
 import { useSubscription } from '../../hooks/useSubscription'
@@ -522,10 +522,57 @@ function DeleteConfirmationModal({
 }
 
 function BillingPanel({ addToast }: { addToast: (title: string, message: string, type?: 'success' | 'error') => void }) {
-  const { subscription, isLoadingSubscription, updatePlan, isUpdatingPlan } = useSubscription();
+  const {
+    subscription,
+    isLoadingSubscription,
+    updatePlan,
+    isUpdatingPlan,
+    openCustomerPortal,
+    isOpeningPortal,
+    verifySession,
+  } = useSubscription();
+
   const [selectedPlan, setSelectedPlan] = useState<string>('Professional');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasCheckedParams = useRef(false);
+
+  // Automatically verify session when returning from Stripe Checkout
+  useEffect(() => {
+    if (hasCheckedParams.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    const billingSuccess = params.get('billing_success');
+    const billingCanceled = params.get('billing_canceled');
+    const targetPlan = params.get('plan');
+
+    if (billingSuccess === 'true') {
+      hasCheckedParams.current = true;
+      if (sessionId) {
+        verifySession(sessionId)
+          .then(() => {
+            addToast('Subscription Upgraded', `Successfully upgraded workspace to the ${targetPlan ?? 'new'} Plan!`);
+          })
+          .catch(() => {
+            addToast('Verification Warning', 'Payment succeeded, please refresh if your plan quota has not updated yet.', 'error');
+          });
+      } else {
+        addToast('Subscription Updated', `Successfully switched workspace to the ${targetPlan ?? 'new'} Plan.`);
+      }
+
+      params.delete('session_id');
+      params.delete('billing_success');
+      params.delete('plan');
+      const cleanQuery = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}`);
+    } else if (billingCanceled === 'true') {
+      hasCheckedParams.current = true;
+      addToast('Checkout Canceled', 'Stripe Checkout was canceled. No changes were made to your subscription.', 'error');
+      params.delete('billing_canceled');
+      const cleanQuery = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}`);
+    }
+  }, [verifySession, addToast]);
 
   if (isLoadingSubscription || !subscription) {
     return <div className="p-8 text-xs text-slate-400">Loading subscription details...</div>;
@@ -542,13 +589,25 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
   const handleUpgradeSubmit = async () => {
     try {
       setErrorMessage(null);
-      await updatePlan({ targetPlan: selectedPlan });
-      setIsModalOpen(false);
-      addToast('Subscription Updated', `Successfully switched workspace to the ${selectedPlan} Plan.`);
+      const res = await updatePlan({ targetPlan: selectedPlan });
+      // If Stripe redirected, the browser is navigating away; otherwise close modal and toast
+      if (res.updatedImmediately) {
+        setIsModalOpen(false);
+        addToast('Subscription Updated', `Successfully switched workspace to the ${selectedPlan} Plan.`);
+      }
     } catch (err: any) {
       const msg = err?.response?.data || 'Failed to update subscription plan.';
       setErrorMessage(msg);
       addToast('Error', msg, 'error');
+    }
+  };
+
+  const handleOpenPortal = async () => {
+    try {
+      await openCustomerPortal();
+    } catch (err: any) {
+      const msg = err?.response?.data || 'Unable to open Stripe Customer Portal.';
+      addToast('Billing Portal Error', msg, 'error');
     }
   };
 
@@ -575,12 +634,24 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
               Billed {subscription.billingInterval.toLowerCase()} · Renews on {new Date(subscription.renewalDateUtc).toLocaleDateString()}
             </p>
           </div>
-          <button 
-            onClick={() => { setSelectedPlan(subscription.planName); setIsModalOpen(true); }}
-            className="h-9 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#46546a] transition-colors hover:bg-[#f8f9fb]"
-          >
-            Change / Upgrade Plan
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {subscription.isStripeConfigured && subscription.stripeCustomerId && (
+              <button
+                type="button"
+                onClick={handleOpenPortal}
+                disabled={isOpeningPortal}
+                className="h-9 rounded-lg border border-[#d8dee6] bg-white px-3.5 text-[12px] font-semibold text-[#46546a] transition-colors hover:bg-[#f8f9fb] disabled:opacity-50"
+              >
+                {isOpeningPortal ? 'Opening Portal...' : 'Manage Billing & Invoices ↗'}
+              </button>
+            )}
+            <button 
+              onClick={() => { setSelectedPlan(subscription.planName); setErrorMessage(null); setIsModalOpen(true); }}
+              className="h-9 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b3850]"
+            >
+              Change / Upgrade Plan
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-6 p-5 sm:p-6 md:grid-cols-2">
@@ -598,7 +669,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
               <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${roomsPercent}%` }} />
             </div>
             <p className="mt-2.5 text-[11px] text-[#9aa4b2]">
-              {subscription.maxRoomsQuota === 9999 ? 'Unlimited rooms provisioned' : `${subscription.maxRoomsQuota - subscription.usedRoomsCount} rooms remaining on plan`}
+              {subscription.maxRoomsQuota === 9999 ? 'Unlimited rooms provisioned' : `${Math.max(0, subscription.maxRoomsQuota - subscription.usedRoomsCount)} rooms remaining on plan`}
             </p>
           </div>
 
@@ -616,7 +687,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
               <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${itemsPercent}%` }} />
             </div>
             <p className="mt-2.5 text-[11px] text-[#9aa4b2]">
-              {subscription.maxItemsQuota === 999999 ? 'Unlimited catalog items' : `${subscription.maxItemsQuota - subscription.usedItemsCount} items remaining on plan`}
+              {subscription.maxItemsQuota === 999999 ? 'Unlimited catalog items' : `${Math.max(0, subscription.maxItemsQuota - subscription.usedItemsCount)} items remaining on plan`}
             </p>
           </div>
         </div>
@@ -629,7 +700,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
             <p className="mt-1 text-[11px] text-[#7790b4]">Unlock advanced controls, priority compliance reporting, and unlimited workspace capacity.</p>
           </div>
           <button 
-            onClick={() => { setSelectedPlan('Enterprise'); setIsModalOpen(true); }}
+            onClick={() => { setSelectedPlan('Enterprise'); setErrorMessage(null); setIsModalOpen(true); }}
             className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#415a7c] px-4 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#344d70]"
           >
             Upgrade to Enterprise <ChevronDown className="size-3.5 -rotate-90" />
@@ -641,7 +712,11 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 ring-1 ring-slate-900/5">
             <h2 className="text-[15px] font-bold text-slate-950">Select Subscription Tier</h2>
-            <p className="mt-1 text-[11px] text-slate-500">Choose the plan that best fits your needs.</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {subscription.isStripeConfigured
+                ? 'Paid upgrades will redirect you to Stripe Checkout.'
+                : 'Choose the plan that best fits your needs.'}
+            </p>
 
             {errorMessage && (
               <div className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700 border border-rose-100">
@@ -690,7 +765,11 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
                 disabled={isUpdatingPlan}
                 className="h-9 rounded-xl bg-slate-950 px-4 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all"
               >
-                {isUpdatingPlan ? 'Updating...' : 'Confirm Plan Change'}
+                {isUpdatingPlan
+                  ? 'Processing...'
+                  : subscription.isStripeConfigured && selectedPlan !== 'Free'
+                  ? 'Continue to Stripe Checkout →'
+                  : 'Confirm Plan Change'}
               </button>
             </div>
           </div>
