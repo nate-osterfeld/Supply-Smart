@@ -30,6 +30,14 @@ jobs:
             \"JwtSettings\": {
               \"Secret\": \"${{ secrets.JWT_SIGNING_KEY }}\"
             },
+            \"FrontendUrl\": \"https://supplysmart-prod.blackgrass-3604f914.eastus2.azurecontainerapps.io\",
+            \"StripeSettings\": {
+              \"SecretKey\": \"${{ secrets.STRIPE_SECRET_KEY }}\",
+              \"WebhookSecret\": \"\",
+              \"StarterPriceId\": \"${{ secrets.STRIPE_STARTER_PRICE_ID }}\",
+              \"ProfessionalPriceId\": \"${{ secrets.STRIPE_PROFESSIONAL_PRICE_ID }}\",
+              \"EnterprisePriceId\": \"${{ secrets.STRIPE_ENTERPRISE_PRICE_ID }}\"
+            },
             \"EmailSettings\": {
               \"Host\": \"smtp.sendgrid.net\",
               \"Port\": 587,
