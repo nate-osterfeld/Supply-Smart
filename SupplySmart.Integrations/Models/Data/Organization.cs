@@ -33,4 +33,5 @@ public class Organization : IEntityBase
     public List<Container> Containers { get; set; } = new List<Container>();
     public List<InventoryItem> InventoryItems { get; set; } = new List<InventoryItem>();
     public List<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+    public List<NotificationTemplate> NotificationTemplates { get; set; } = new List<NotificationTemplate>();
 }
