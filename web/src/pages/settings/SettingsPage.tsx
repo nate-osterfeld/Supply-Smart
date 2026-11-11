@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useStorage } from '../../hooks/useStorage'
 import { useUsers } from '../../hooks/useUsers'
 import { useSubscription } from '../../hooks/useSubscription'
+import { useNotifications } from '../../hooks/useNotifications'
 
 type IconProps = { className?: string; strokeWidth?: number }
 type IconName = 'bell' | 'boxes' | 'chevron-down' | 'clipboard' | 'chart' | 'dashboard' | 'logout' | 'mail' | 'map-pin' | 'menu' | 'network' | 'package' | 'pencil' | 'save' | 'send' | 'settings' | 'shield' | 'sparkles' | 'trash' | 'users' | 'x' | 'check'
@@ -170,14 +171,6 @@ const settingsTabs = [
   { id: 'locations', label: 'Locations & Warehouses', icon: MapPin },
 ]
 
-const template = `# 🚨 SupplySmart Low Stock Alert: {{item_name}}
-
-**Location:** {{supply_room}}  
-**Current Stock:** {{current_quantity}}  
-**Minimum Threshold:** {{minimum_threshold}}
-
-Please restock this item at your earliest convenience.`
-
 export type ToastMessage = {
   id: number;
   type: 'success' | 'error';
@@ -187,9 +180,6 @@ export type ToastMessage = {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('billing')
-  const [alertTrigger, setAlertTrigger] = useState('Item Reaches Low-Stock Limit')
-  const [templateValue, setTemplateValue] = useState(template)
-  const [saved, setSaved] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
   const addToast = (title: string, message: string, type: 'success' | 'error' = 'success') => {
@@ -240,12 +230,6 @@ export default function SettingsPage() {
     }
   }
 
-  const saveChanges = () => {
-    setSaved(true)
-    addToast('Templates Saved', 'Low-stock email templates updated successfully.')
-    window.setTimeout(() => setSaved(false), 2200)
-  }
-
   return (
     <div className="min-h-screen bg-[#f7f8fa] text-[#172033] pb-12">
       <header className="flex min-h-[74px] items-center justify-between border-b border-[#e4e8ee] bg-white px-5 sm:px-8 lg:px-10">
@@ -289,7 +273,7 @@ export default function SettingsPage() {
 
         <section className="min-w-0 flex-1 pb-12">
           {activeTab === 'billing' && <BillingPanel addToast={addToast} />}
-          {activeTab === 'email' && <EmailPanel alertTrigger={alertTrigger} setAlertTrigger={setAlertTrigger} templateValue={templateValue} setTemplateValue={setTemplateValue} saveChanges={saveChanges} saved={saved} />}
+          {activeTab === 'email' && <EmailPanel addToast={addToast} />}
           {activeTab === 'permissions' && <PermissionsPanel addToast={addToast} />}
           {activeTab === 'locations' && (
             <LocationsPanel 
@@ -590,7 +574,6 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
     try {
       setErrorMessage(null);
       const res = await updatePlan({ targetPlan: selectedPlan });
-      // If Stripe redirected, the browser is navigating away; otherwise close modal and toast
       if (res.updatedImmediately) {
         setIsModalOpen(false);
         addToast('Subscription Updated', `Successfully switched workspace to the ${selectedPlan} Plan.`);
@@ -779,69 +762,300 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
   )
 }
 
-function EmailPanel({ alertTrigger, setAlertTrigger, templateValue, setTemplateValue, saveChanges, saved }: { alertTrigger: string; setAlertTrigger: (value: string) => void; templateValue: string; setTemplateValue: (value: string) => void; saveChanges: () => void; saved: boolean }) {
+function EmailPanel({ addToast }: { addToast: (title: string, message: string, type?: 'success' | 'error') => void }) {
+  const {
+    templates,
+    isLoadingTemplates,
+    saveTemplate,
+    isSavingTemplate,
+    sendTestAlert,
+    isSendingTest,
+  } = useNotifications();
+
+  const [alertTrigger, setAlertTrigger] = useState('Item Reaches Low-Stock Limit');
+  const [templateValue, setTemplateValue] = useState('');
+  const [recipients, setRecipients] = useState<string[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [lastUpdatedInfo, setLastUpdatedInfo] = useState<string>('System Default');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const availableVariables = [
+    { tag: '{{item_name}}', label: 'Item Name' },
+    { tag: '{{supply_room}}', label: 'Supply Room' },
+    { tag: '{{current_quantity}}', label: 'Current Qty' },
+    { tag: '{{minimum_threshold}}', label: 'Min Threshold' },
+    { tag: '{{location_name}}', label: 'Location Hub' },
+  ];
+
+  useEffect(() => {
+    if (!templates || templates.length === 0) return;
+    const matched = templates.find((t) => t.triggerType === alertTrigger);
+    if (matched) {
+      setTemplateValue(matched.templateMarkdown);
+      setRecipients(matched.additionalRecipients || []);
+      const dateStr = matched.lastUpdatedDateUtc
+        ? new Date(matched.lastUpdatedDateUtc).toLocaleString()
+        : 'Just now';
+      setLastUpdatedInfo(`Last updated by ${matched.lastUpdatedBy || 'Admin'} · ${dateStr}`);
+    }
+  }, [alertTrigger, templates]);
+
+  const insertVariable = (tag: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setTemplateValue((prev) => `${prev}${prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' '}${tag}`);
+      return;
+    }
+
+    textarea.focus();
+    
+    // Using execCommand allows the browser to natively register the change in the undo (Ctrl+Z) stack
+    if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+      document.execCommand('insertText', false, tag);
+    } else {
+      // Fallback if execCommand is restricted in certain contexts
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const updatedText = text.substring(0, start) + tag + text.substring(end);
+      setTemplateValue(updatedText);
+
+      setTimeout(() => {
+        textarea.setSelectionRange(start + tag.length, start + tag.length);
+      }, 0);
+    }
+  };
+
+  const addEmail = (rawText: string) => {
+    const parts = rawText.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+
+    const validNewEmails: string[] = [];
+    for (const part of parts) {
+      if (!part.includes('@') || !part.includes('.')) {
+        addToast('Invalid Email', `"${part}" is not a valid email address.`, 'error');
+        continue;
+      }
+      if (!recipients.some((r) => r.toLowerCase() === part.toLowerCase()) &&
+          !validNewEmails.some((r) => r.toLowerCase() === part.toLowerCase())) {
+        validNewEmails.push(part);
+      }
+    }
+
+    if (validNewEmails.length > 0) {
+      setRecipients([...recipients, ...validNewEmails]);
+    }
+    setInputValue('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addEmail(inputValue);
+    } else if (e.key === 'Backspace' && !inputValue && recipients.length > 0) {
+      setRecipients(recipients.slice(0, -1));
+    }
+  };
+
+  const handleInputBlur = () => {
+    if (inputValue.trim()) {
+      addEmail(inputValue);
+    }
+  };
+
+  const removeEmail = (emailToRemove: string) => {
+    setRecipients(recipients.filter((r) => r !== emailToRemove));
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveTemplate({
+        triggerType: alertTrigger,
+        templateMarkdown: templateValue,
+        additionalRecipients: recipients,
+      });
+      addToast('Template Saved', `Saved template settings for "${alertTrigger}".`);
+    } catch (err: any) {
+      addToast('Error', 'Failed to save notification template.', 'error');
+    }
+  };
+
+  const handleTestAlert = async () => {
+    try {
+      const res = await sendTestAlert({
+        triggerType: alertTrigger,
+        templateMarkdown: templateValue,
+        additionalRecipients: recipients,
+      });
+      addToast(
+        'Test Alert Dispatched',
+        `Sent test "${alertTrigger}" email to ${res.recipientCount} recipient(s) (Admins, Managers & Additional).`
+      );
+    } catch (err: any) {
+      addToast('Error', 'Failed to send test alert email.', 'error');
+    }
+  };
+
+  if (isLoadingTemplates) {
+    return <div className="p-8 text-xs text-slate-400">Loading notification templates...</div>;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-[14px] font-semibold">Low-Stock Email Templates</p>
-        <p className="mt-1 text-[12px] text-[#8994a3]">Customize the markdown text blocks auto-fired to phone networks during threshold triggers.</p>
+        <p className="text-[14px] font-semibold text-slate-900">Low-Stock Email Templates</p>
+        <p className="mt-1 text-[12px] text-[#8994a3]">
+          Customize the markdown templates automatically emailed when inventory items cross threshold limits.
+        </p>
       </div>
+
       <div className="rounded-xl border border-[#e1e6ec] bg-white shadow-[0_1px_2px_rgba(23,32,51,0.02)]">
-        <div className="border-b border-[#edf0f3] p-5 sm:p-6">
+        <div className="border-b border-[#edf0f3] p-5 sm:p-6 space-y-4">
           <div className="flex items-start gap-3">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f0f3f7] text-[#64748b]">
               <InlineIcon name="bell" className="size-4" />
             </div>
             <div>
-              <p className="text-[13px] font-semibold">Alert notification content</p>
-              <p className="mt-1 text-[11px] leading-5 text-[#929cab]">Use the available variables to personalize notifications sent to your team.</p>
+              <p className="text-[13px] font-semibold text-slate-900">Alert notification routing &amp; triggers</p>
+              <p className="mt-1 text-[11px] leading-5 text-[#929cab]">
+                Select an inventory event trigger to customize its specific message template and external recipients.
+              </p>
             </div>
           </div>
-          <label className="mt-5 block text-[11px] font-semibold text-[#536174]" htmlFor="trigger">Alert Event Trigger</label>
-          <div className="relative mt-2">
-            <select 
-              id="trigger" 
-              value={alertTrigger} 
-              onChange={(event) => setAlertTrigger(event.target.value)} 
-              className="h-10 w-full appearance-none rounded-lg border border-[#dfe4ea] bg-white px-3 text-[12px] text-[#344154] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]"
-            >
-              <option>Item Reaches Low-Stock Limit</option>
-              <option>Item Falls Out of Stock</option>
-              <option>Weekly Inventory Digest</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-3 size-4 text-[#8994a3]" />
+
+          <div className="grid gap-4 sm:grid-cols-2 pt-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-[#536174] mb-1.5" htmlFor="trigger">
+                Alert Event Trigger
+              </label>
+              <div className="relative">
+                <select
+                  id="trigger"
+                  value={alertTrigger}
+                  onChange={(event) => setAlertTrigger(event.target.value)}
+                  className="h-10 w-full appearance-none rounded-lg border border-[#dfe4ea] bg-white px-3 text-[12px] font-medium text-[#344154] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]"
+                >
+                  <option value="Item Reaches Low-Stock Limit">Item Reaches Low-Stock Limit</option>
+                  <option value="Item Falls Out of Stock">Item Falls Out of Stock</option>
+                  <option value="Weekly Inventory Digest">Weekly Inventory Digest</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-3 size-4 text-[#8994a3]" />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label className="block text-[11px] font-semibold text-[#536174]" htmlFor="recipient-input">
+                  Additional Recipients
+                </label>
+                {/* Info Icon with Hover Tooltip */}
+                <div className="relative group inline-flex items-center">
+                  <span
+                    tabIndex={0}
+                    className="inline-flex size-4 items-center justify-center rounded-full border border-slate-300 bg-slate-50 text-[10px] font-bold text-slate-500 cursor-help hover:border-slate-400 hover:text-slate-700"
+                  >
+                    i
+                  </span>
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-64 -translate-x-1/2 rounded-lg bg-slate-900 p-2.5 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                    Alerts are <strong>automatically sent to all active Workspace Admins and Managers</strong>. Add any extra emails here.
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 min-h-[40px] w-full rounded-lg border border-[#dfe4ea] bg-white px-2.5 py-1.5 text-[12px] text-[#344154] focus-within:border-[#9aabc2] focus-within:ring-3 focus-within:ring-[#e7edf5] transition-all">
+                {recipients.map((email) => (
+                  <span
+                    key={email}
+                    className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-800 border border-slate-200"
+                  >
+                    <span>{email}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeEmail(email)}
+                      className="text-slate-400 hover:text-rose-600 transition-colors"
+                      title="Remove recipient"
+                    >
+                      <InlineIcon name="x" className="size-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  id="recipient-input"
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onBlur={handleInputBlur}
+                  placeholder="Add email + press Enter..."
+                  className="flex-1 min-w-[140px] bg-transparent outline-none text-[12px] text-[#344154] placeholder:text-slate-400 py-0.5"
+                />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-semibold text-[#536174]" htmlFor="template">Message template</label>
-            <span className="text-[10px] text-[#a1aab7]">Markdown supported</span>
+
+        <div className="p-5 sm:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <label className="text-[11px] font-semibold text-[#536174]" htmlFor="template">
+              Message template
+            </label>
+            <span className="text-[10px] text-[#a1aab7]">
+              Markdown supported · Click a variable token below to insert
+            </span>
           </div>
-          <textarea 
-            id="template" 
-            value={templateValue} 
-            onChange={(event) => setTemplateValue(event.target.value)} 
-            className="mt-2 min-h-[245px] w-full resize-y rounded-lg border border-[#dfe4ea] bg-[#fbfcfd] p-4 font-mono text-[12px] leading-6 text-[#485568] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]" 
-            spellCheck={false} 
-          />
-          <div className="mt-5 flex flex-col-reverse gap-3 border-t border-[#edf0f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] text-[#9aa4b2]">Last updated by Jordan Davis · Just now</p>
-            <div className="flex gap-2">
-              <button className="flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#536174] transition-colors hover:bg-[#f8f9fb]">
-                <Send className="size-3.5" />Send Test Alert
-              </button>
-              <button 
-                onClick={saveChanges} 
-                className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b374b]"
+
+          <div className="flex flex-wrap gap-1.5 rounded-lg border border-slate-100 bg-slate-50/70 p-2.5">
+            {availableVariables.map((v) => (
+              <button
+                key={v.tag}
+                type="button"
+                onClick={() => insertVariable(v.tag)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-mono font-medium text-slate-700 shadow-2xs transition-all hover:border-slate-900 hover:bg-slate-900 hover:text-white cursor-pointer"
+                title={`Insert ${v.label}`}
               >
-                <Save className="size-3.5" />{saved ? 'Changes Saved' : 'Save Changes'}
+                <span>{v.tag}</span>
+                <span className="font-sans text-[10px] text-slate-400">({v.label})</span>
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            id="template"
+            value={templateValue}
+            onChange={(event) => setTemplateValue(event.target.value)}
+            className="min-h-[230px] w-full resize-y rounded-lg border border-[#dfe4ea] bg-[#fbfcfd] p-4 font-mono text-[12px] leading-6 text-[#485568] outline-none transition-shadow focus:border-[#9aabc2] focus:ring-3 focus:ring-[#e7edf5]"
+            spellCheck={false}
+          />
+
+          <div className="flex flex-col-reverse gap-3 border-t border-[#edf0f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[11px] text-[#9aa4b2]">{lastUpdatedInfo}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleTestAlert}
+                disabled={isSendingTest}
+                className="flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee6] px-3.5 text-[12px] font-semibold text-[#536174] transition-colors hover:bg-[#f8f9fb] disabled:opacity-50"
+              >
+                <Send className="size-3.5" />
+                {isSendingTest ? 'Sending Test...' : 'Send Test Alert'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSavingTemplate}
+                className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[#172033] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#2b374b] disabled:opacity-50"
+              >
+                <Save className="size-3.5" />
+                {isSavingTemplate ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function LocationsPanel({ locations, isLoadingLocations, onAdd, onEdit, onDelete }: { locations: any[]; isLoadingLocations: boolean; onAdd: () => void; onEdit: (loc: any) => void; onDelete: (loc: any) => void }) {
