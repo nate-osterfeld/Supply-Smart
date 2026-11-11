@@ -22,16 +22,17 @@ namespace SupplySmart.Domain.Services
         Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail);
         Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail);
         Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail);
-        
     }
 
     public class LocationService : ILocationService
     {
         private readonly SupplySmartDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public LocationService(SupplySmartDbContext context)
+        public LocationService(SupplySmartDbContext context, INotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         public async Task<IEnumerable<LocationDto>> GetLocationsAsync(int organizationId)
@@ -233,35 +234,29 @@ namespace SupplySmart.Domain.Services
 
         public async Task<RoomDto> CreateRoomAsync(int organizationId, int locationId, string roomName)
         {
-            // 1. Verify location scope belongs to the tenant
             var location = await _context.Locations
                 .FirstOrDefaultAsync(l => l.Id == locationId && l.OrganizationId == organizationId);
 
             if (location == null) throw new UnauthorizedAccessException("Invalid location scope.");
 
-            // 2. Fetch the organization to check the max rooms quota
             var org = await _context.Organizations
                 .AsNoTracking()
                 .FirstOrDefaultAsync(o => o.Id == organizationId);
 
             if (org == null) throw new InvalidOperationException("Organization not found.");
 
-            // If MaxRoomsQuota is 0 or uninitialized, default to Free tier limit (2)
             var maxRoomsQuota = org.MaxRoomsQuota > 0 ? org.MaxRoomsQuota : 2;
             var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
 
-            // 3. Count current active rooms for this tenant
             var currentRoomsCount = await _context.Rooms
                 .CountAsync(r => r.OrganizationId == organizationId);
 
-            // 4. Enforce MaxRoomsQuota limit
             if (currentRoomsCount >= maxRoomsQuota)
             {
                 throw new InvalidOperationException(
                     $"You have reached the maximum room limit ({maxRoomsQuota} rooms) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to provision additional rooms.");
             }
 
-            // 5. Proceed with room creation
             var room = new Room
             {
                 Name = roomName,
@@ -403,22 +398,18 @@ namespace SupplySmart.Domain.Services
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
-            // 1. Fetch organization to check item quota limits
             var org = await _context.Organizations
                 .AsNoTracking()
                 .FirstOrDefaultAsync(o => o.Id == organizationId);
 
             if (org == null) throw new InvalidOperationException("Organization not found.");
 
-            // Fallback safeguard. Default to Free tier limit (50)
             var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
             var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
 
-            // 2. Count current inventory items for this tenant
             var currentItemsCount = await _context.InventoryItems
                 .CountAsync(i => i.OrganizationId == organizationId);
 
-            // 3. Enforce MaxItemsQuota limit
             if (currentItemsCount >= maxItemsQuota)
             {
                 throw new InvalidOperationException(
@@ -454,6 +445,9 @@ namespace SupplySmart.Domain.Services
 
             await _context.SaveChangesAsync();
 
+            // Check if newly added item starts out below threshold or out of stock
+            await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, dto.Quantity + 1, item);
+
             return new InventoryItemDto
             {
                 Id = item.Id,
@@ -484,6 +478,7 @@ namespace SupplySmart.Domain.Services
 
             if (item == null || targetContainer == null) return false;
 
+            int oldQty = item.Quantity;
             int moveQty = quantityToMove ?? item.Quantity;
             if (moveQty <= 0 || moveQty > item.Quantity) return false;
 
@@ -553,6 +548,13 @@ namespace SupplySmart.Domain.Services
             }
 
             await _context.SaveChangesAsync();
+
+            // Trigger stock alert if partial transfer leaves the source bin running low
+            if (moveQty < oldQty)
+            {
+                await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, oldQty, item);
+            }
+
             return true;
         }
 
@@ -564,6 +566,8 @@ namespace SupplySmart.Domain.Services
                 .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
 
             if (item == null) return false;
+
+            int oldQty = item.Quantity;
 
             item.Name = dto.Name;
             item.Sku = dto.Sku;
@@ -588,6 +592,10 @@ namespace SupplySmart.Domain.Services
             });
 
             await _context.SaveChangesAsync();
+
+            // Check and trigger email notifications if quantity crossed into low stock or out of stock
+            await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, oldQty, item);
+
             return true;
         }
 
