@@ -53,6 +53,8 @@ namespace SupplySmart.Endpoints.Configuration
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
             locationEndpoints.MapPost("/rooms/{locationId}", LocationEndpoints.CreateRoom)
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
+                .Produces(StatusCodes.Status403Forbidden)
                 .WithName("CreateRoom")
                 .WithDescription("Creates a new room within a specified physical location.")
                 .Produces<RoomDto>(StatusCodes.Status200OK)
@@ -60,18 +62,24 @@ namespace SupplySmart.Endpoints.Configuration
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
             locationEndpoints.MapPut("/rooms/{roomId}", LocationEndpoints.UpdateRoom)
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
+                .Produces(StatusCodes.Status403Forbidden)
                 .WithName("UpdateRoom")
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized);
 
             locationEndpoints.MapDelete("/rooms/{roomId}", LocationEndpoints.DeleteRoom)
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
+                .Produces(StatusCodes.Status403Forbidden)
                 .WithName("DeleteRoom")
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized);
 
             locationEndpoints.MapPost("/rooms/{roomId}/containers", LocationEndpoints.CreateContainer)
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
+                .Produces(StatusCodes.Status403Forbidden)
                 .WithName("CreateContainer")
                 .WithDescription("Creates a new storage bin or shelf inside a specified room.")
                 .Produces<ContainerDto>(StatusCodes.Status200OK)
@@ -79,12 +87,16 @@ namespace SupplySmart.Endpoints.Configuration
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
             locationEndpoints.MapPut("/containers/{containerId}", LocationEndpoints.UpdateContainer)
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
+                .Produces(StatusCodes.Status403Forbidden)
                 .WithName("UpdateContainer")
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized);
 
             locationEndpoints.MapDelete("/containers/{containerId}", LocationEndpoints.DeleteContainer)
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
+                .Produces(StatusCodes.Status403Forbidden)
                 .WithName("DeleteContainer")
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status404NotFound)
