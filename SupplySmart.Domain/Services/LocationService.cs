@@ -508,40 +508,145 @@ namespace SupplySmart.Domain.Services
             return true;
         }
 
-        public async Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail)
-        {
-            var item = await _context.InventoryItems
-                .Include(i => i.Container)
-                .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+        public async Task<bool> UpdateItemAsync(
+    int organizationId,
+    int itemId,
+    UpdateItemDto dto,
+    string userEmail)
+{
+    var item = await _context.InventoryItems
+        .Include(i => i.Container)
+        .ThenInclude(c => c.Room)
+        .FirstOrDefaultAsync(
+            i => i.Id == itemId &&
+                 i.OrganizationId == organizationId
+        );
 
-            if (item == null) return false;
+    if (item == null)
+    {
+        return false;
+    }
 
-            item.Name = dto.Name;
-            item.Sku = dto.Sku;
-            item.LotNumber = dto.LotNumber;
-            item.Type = (ItemType)dto.Type;
-            item.ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate;
-            item.Quantity = dto.Quantity;
-            item.MinimumThreshold = dto.MinimumThreshold;
-            item.UnitCost = dto.UnitCost;
-            item.Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General";
+    /*
+     * Save the quantity BEFORE changing the item.
+     *
+     * This lets us calculate the real inventory movement.
+     */
+    var quantityBefore = item.Quantity;
+    var quantityAfter = dto.Quantity;
 
-            var locationContext = item.Container != null ? $"{item.Container.Room.Name} › {item.Container.Name}" : "Unknown Location";
+    var quantityChange = quantityAfter - quantityBefore;
 
-            _context.AuditLogs.Add(new AuditLog
+    /*
+     * Keep historical snapshots in case the item's
+     * name or SKU is changed during this update.
+     */
+    var historicalItemName = item.Name;
+    var historicalSku = item.Sku;
+
+    /*
+     * Determine what kind of inventory movement occurred.
+     *
+     * Negative = stock was consumed / checked out
+     * Positive = inventory was replenished
+     */
+    string? transactionType = null;
+
+    if (quantityChange < 0)
+    {
+        transactionType = "checkout";
+    }
+    else if (quantityChange > 0)
+    {
+        transactionType = "restock";
+    }
+
+    /*
+     * Update the inventory item.
+     */
+    item.Name = dto.Name;
+    item.Sku = dto.Sku;
+    item.LotNumber = dto.LotNumber;
+    item.Type = (ItemType)dto.Type;
+    item.ExpirationDate =
+        dto.Type == 1
+            ? null
+            : dto.ExpirationDate;
+
+    item.Quantity = dto.Quantity;
+    item.MinimumThreshold = dto.MinimumThreshold;
+    item.UnitCost = dto.UnitCost;
+
+    item.Category =
+        !string.IsNullOrEmpty(dto.Category)
+            ? dto.Category
+            : "General";
+
+    var locationContext =
+        item.Container != null
+            ? $"{item.Container.Room.Name} › {item.Container.Name}"
+            : "Unknown Location";
+
+    /*
+     * Existing audit log.
+     *
+     * This remains useful for human-readable activity history.
+     */
+    _context.AuditLogs.Add(new AuditLog
+    {
+        OrganizationId = organizationId,
+        Timestamp = DateTime.UtcNow,
+        UserEmail = userEmail,
+        ActionType = "Item Updated",
+        ItemDetails =
+            $"{item.Name} (Qty: {item.Quantity}, SKU: {item.Sku})",
+        LocationName = locationContext
+    });
+
+    /*
+     * Create a structured inventory transaction ONLY
+     * when the quantity actually changed.
+     *
+     * This is the historical dataset that forecasting
+     * will eventually use.
+     */
+    if (transactionType != null)
+    {
+        _context.InventoryTransactions.Add(
+            new InventoryTransaction
             {
                 OrganizationId = organizationId,
-                Timestamp = DateTime.UtcNow,
-                UserEmail = userEmail,
-                ActionType = "Item Updated",
-                ItemDetails = $"{item.Name} (Qty: {item.Quantity}, SKU: {item.Sku})",
-                LocationName = locationContext
-            });
 
-            await _context.SaveChangesAsync();
-            return true;
-        }
+                InventoryItemId = item.Id,
+
+                TransactionType = transactionType,
+
+                QuantityChange = quantityChange,
+
+                QuantityBefore = quantityBefore,
+
+                QuantityAfter = quantityAfter,
+
+                Timestamp = DateTime.UtcNow,
+
+                UserEmail = userEmail,
+
+                ItemName = historicalItemName,
+
+                Sku = historicalSku,
+
+                Notes =
+                    transactionType == "checkout"
+                        ? $"Inventory decreased by {Math.Abs(quantityChange)} units."
+                        : $"Inventory increased by {quantityChange} units."
+            }
+        );
+    }
+
+    await _context.SaveChangesAsync();
+
+    return true;
+}
 
         public async Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail)
         {
