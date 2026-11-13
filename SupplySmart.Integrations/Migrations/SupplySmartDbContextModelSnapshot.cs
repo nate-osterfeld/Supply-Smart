@@ -279,13 +279,18 @@ namespace SupplySmart.Integrations.Migrations
                     b.ToTable("Locations", (string)null);
                 });
 
-            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Organization", b =>
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.NotificationTemplate", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdditionalRecipients")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("CreatedBy")
                         .IsRequired()
@@ -301,10 +306,79 @@ namespace SupplySmart.Integrations.Migrations
                     b.Property<DateTime>("LastUpdatedDateUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TemplateMarkdown")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "TriggerType")
+                        .IsUnique();
+
+                    b.ToTable("NotificationTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Organization", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BillingInterval")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastUpdatedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("LastUpdatedDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MaxItemsQuota")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxRoomsQuota")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("RenewalDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StripeCustomerId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SubscriptionPlan")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SubscriptionStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -487,6 +561,17 @@ namespace SupplySmart.Integrations.Migrations
                     b.Navigation("Organization");
                 });
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.NotificationTemplate", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany("NotificationTemplates")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.Room", b =>
                 {
                     b.HasOne("SupplySmart.Integrations.Models.Data.Location", "Location")
@@ -538,6 +623,8 @@ namespace SupplySmart.Integrations.Migrations
                     b.Navigation("InventoryItems");
 
                     b.Navigation("Locations");
+
+                    b.Navigation("NotificationTemplates");
 
                     b.Navigation("Rooms");
 

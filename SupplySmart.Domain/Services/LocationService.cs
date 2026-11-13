@@ -22,16 +22,17 @@ namespace SupplySmart.Domain.Services
         Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail);
         Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail);
         Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail);
-        
     }
 
     public class LocationService : ILocationService
     {
         private readonly SupplySmartDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public LocationService(SupplySmartDbContext context)
+        public LocationService(SupplySmartDbContext context, INotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         public async Task<IEnumerable<LocationDto>> GetLocationsAsync(int organizationId)
@@ -238,11 +239,31 @@ namespace SupplySmart.Domain.Services
 
             if (location == null) throw new UnauthorizedAccessException("Invalid location scope.");
 
+            var org = await _context.Organizations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == organizationId);
+
+            if (org == null) throw new InvalidOperationException("Organization not found.");
+
+            var maxRoomsQuota = org.MaxRoomsQuota > 0 ? org.MaxRoomsQuota : 2;
+            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
+
+            var currentRoomsCount = await _context.Rooms
+                .CountAsync(r => r.OrganizationId == organizationId);
+
+            if (currentRoomsCount >= maxRoomsQuota)
+            {
+                throw new InvalidOperationException(
+                    $"You have reached the maximum room limit ({maxRoomsQuota} rooms) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to provision additional rooms.");
+            }
+
             var room = new Room
             {
                 Name = roomName,
                 LocationId = locationId,
-                OrganizationId = organizationId
+                OrganizationId = organizationId,
+                Kind = "Room",
+                Detail = string.Empty
             };
 
             _context.Rooms.Add(room);
@@ -377,13 +398,31 @@ namespace SupplySmart.Domain.Services
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
+            var org = await _context.Organizations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == organizationId);
+
+            if (org == null) throw new InvalidOperationException("Organization not found.");
+
+            var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
+            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
+
+            var currentItemsCount = await _context.InventoryItems
+                .CountAsync(i => i.OrganizationId == organizationId);
+
+            if (currentItemsCount >= maxItemsQuota)
+            {
+                throw new InvalidOperationException(
+                    $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
+            }
+
             var item = new InventoryItem
             {
                 OrganizationId = organizationId,
                 ContainerId = containerId,
                 Name = dto.Name,
                 Sku = dto.Sku,
-                Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General", // <-- Add this
+                Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General",
                 LotNumber = dto.LotNumber,
                 Type = (ItemType)dto.Type,
                 ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate,
@@ -405,6 +444,9 @@ namespace SupplySmart.Domain.Services
             });
 
             await _context.SaveChangesAsync();
+
+            // Check if newly added item starts out below threshold or out of stock
+            await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, dto.Quantity + 1, item);
 
             return new InventoryItemDto
             {
@@ -436,6 +478,7 @@ namespace SupplySmart.Domain.Services
 
             if (item == null || targetContainer == null) return false;
 
+            int oldQty = item.Quantity;
             int moveQty = quantityToMove ?? item.Quantity;
             if (moveQty <= 0 || moveQty > item.Quantity) return false;
 
@@ -505,148 +548,100 @@ namespace SupplySmart.Domain.Services
             }
 
             await _context.SaveChangesAsync();
+
+            // Trigger stock alert if partial transfer leaves the source bin running low
+            if (moveQty < oldQty)
+            {
+                await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, oldQty, item);
+            }
+
             return true;
         }
 
-        public async Task<bool> UpdateItemAsync(
-    int organizationId,
-    int itemId,
-    UpdateItemDto dto,
-    string userEmail)
-{
-    var item = await _context.InventoryItems
-        .Include(i => i.Container)
-        .ThenInclude(c => c.Room)
-        .FirstOrDefaultAsync(
-            i => i.Id == itemId &&
-                 i.OrganizationId == organizationId
-        );
+        public async Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail)
+        {
+            var item = await _context.InventoryItems
+                .Include(i => i.Container)
+                .ThenInclude(c => c.Room)
+                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
 
-    if (item == null)
-    {
-        return false;
-    }
+            if (item == null)
+            {
+                return false;
+            }
 
-    /*
-     * Save the quantity BEFORE changing the item.
-     *
-     * This lets us calculate the real inventory movement.
-     */
-    var quantityBefore = item.Quantity;
-    var quantityAfter = dto.Quantity;
+            // Save quantity before change for forecasting and alerts
+            var quantityBefore = item.Quantity;
+            var quantityAfter = dto.Quantity;
+            var quantityChange = quantityAfter - quantityBefore;
 
-    var quantityChange = quantityAfter - quantityBefore;
+            var historicalItemName = item.Name;
+            var historicalSku = item.Sku;
 
-    /*
-     * Keep historical snapshots in case the item's
-     * name or SKU is changed during this update.
-     */
-    var historicalItemName = item.Name;
-    var historicalSku = item.Sku;
+            string? transactionType = null;
+            if (quantityChange < 0)
+            {
+                transactionType = "checkout";
+            }
+            else if (quantityChange > 0)
+            {
+                transactionType = "restock";
+            }
 
-    /*
-     * Determine what kind of inventory movement occurred.
-     *
-     * Negative = stock was consumed / checked out
-     * Positive = inventory was replenished
-     */
-    string? transactionType = null;
+            // Update item fields
+            item.Name = dto.Name;
+            item.Sku = dto.Sku;
+            item.LotNumber = dto.LotNumber;
+            item.Type = (ItemType)dto.Type;
+            item.ExpirationDate = dto.Type == 1 ? null : dto.ExpirationDate;
+            item.Quantity = dto.Quantity;
+            item.MinimumThreshold = dto.MinimumThreshold;
+            item.UnitCost = dto.UnitCost;
+            item.Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General";
 
-    if (quantityChange < 0)
-    {
-        transactionType = "checkout";
-    }
-    else if (quantityChange > 0)
-    {
-        transactionType = "restock";
-    }
+            var locationContext = item.Container != null
+                ? $"{item.Container.Room.Name} › {item.Container.Name}"
+                : "Unknown Location";
 
-    /*
-     * Update the inventory item.
-     */
-    item.Name = dto.Name;
-    item.Sku = dto.Sku;
-    item.LotNumber = dto.LotNumber;
-    item.Type = (ItemType)dto.Type;
-    item.ExpirationDate =
-        dto.Type == 1
-            ? null
-            : dto.ExpirationDate;
-
-    item.Quantity = dto.Quantity;
-    item.MinimumThreshold = dto.MinimumThreshold;
-    item.UnitCost = dto.UnitCost;
-
-    item.Category =
-        !string.IsNullOrEmpty(dto.Category)
-            ? dto.Category
-            : "General";
-
-    var locationContext =
-        item.Container != null
-            ? $"{item.Container.Room.Name} › {item.Container.Name}"
-            : "Unknown Location";
-
-    /*
-     * Existing audit log.
-     *
-     * This remains useful for human-readable activity history.
-     */
-    _context.AuditLogs.Add(new AuditLog
-    {
-        OrganizationId = organizationId,
-        Timestamp = DateTime.UtcNow,
-        UserEmail = userEmail,
-        ActionType = "Item Updated",
-        ItemDetails =
-            $"{item.Name} (Qty: {item.Quantity}, SKU: {item.Sku})",
-        LocationName = locationContext
-    });
-
-    /*
-     * Create a structured inventory transaction ONLY
-     * when the quantity actually changed.
-     *
-     * This is the historical dataset that forecasting
-     * will eventually use.
-     */
-    if (transactionType != null)
-    {
-        _context.InventoryTransactions.Add(
-            new InventoryTransaction
+            _context.AuditLogs.Add(new AuditLog
             {
                 OrganizationId = organizationId,
-
-                InventoryItemId = item.Id,
-
-                TransactionType = transactionType,
-
-                QuantityChange = quantityChange,
-
-                QuantityBefore = quantityBefore,
-
-                QuantityAfter = quantityAfter,
-
                 Timestamp = DateTime.UtcNow,
-
                 UserEmail = userEmail,
+                ActionType = "Item Updated",
+                ItemDetails = $"{item.Name} (Qty: {item.Quantity}, SKU: {item.Sku})",
+                LocationName = locationContext
+            });
 
-                ItemName = historicalItemName,
-
-                Sku = historicalSku,
-
-                Notes =
-                    transactionType == "checkout"
-                        ? $"Inventory decreased by {Math.Abs(quantityChange)} units."
-                        : $"Inventory increased by {quantityChange} units."
+            if (transactionType != null)
+            {
+                _context.InventoryTransactions.Add(
+                    new InventoryTransaction
+                    {
+                        OrganizationId = organizationId,
+                        InventoryItemId = item.Id,
+                        TransactionType = transactionType,
+                        QuantityChange = quantityChange,
+                        QuantityBefore = quantityBefore,
+                        QuantityAfter = quantityAfter,
+                        Timestamp = DateTime.UtcNow,
+                        UserEmail = userEmail,
+                        ItemName = historicalItemName,
+                        Sku = historicalSku,
+                        Notes = transactionType == "checkout"
+                            ? $"Inventory decreased by {Math.Abs(quantityChange)} units."
+                            : $"Inventory increased by {quantityChange} units."
+                    }
+                );
             }
-        );
-    }
 
-    await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
-    return true;
-}
+            // Check and trigger email notifications if quantity crossed into low stock or out of stock
+            await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, quantityBefore, item);
+
+            return true;
+        }
 
         public async Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail)
         {

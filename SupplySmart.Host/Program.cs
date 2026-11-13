@@ -24,6 +24,8 @@ builder.Services.AddDbContext<SupplySmartDbContext>(options =>
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(SupplySmartRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITenantSeederService, TenantSeederService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
@@ -75,6 +77,8 @@ app.UseStaticFiles();
 // Map API endpoints
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapSubscriptionEndpoints();
+app.MapNotificationEndpoints();
 app.MapDashboardEndpoints();
 app.MapLocationEndpoints();
 app.MapCatalogEndpoints();

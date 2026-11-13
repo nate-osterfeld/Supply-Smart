@@ -16,6 +16,7 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import { useStorage } from '../../hooks/useStorage';
+import { useSubscription } from '../../hooks/useSubscription';
 
 type ViewLevel = 'locations' | 'rooms' | 'containers';
 type ModalType = 'none' | 'roomOrContainer' | 'editRoom' | 'editContainer' | 'item' | 'move';
@@ -51,6 +52,8 @@ export default function StoragePage() {
   const [activeModal, setActiveModal] = useState<ModalType>('none');
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityKind, setNewEntityKind] = useState('Cabinet');
+  const [modalErrorMessage, setModalErrorMessage] = useState<string | null>(null);
+  const [itemErrorMessage, setItemErrorMessage] = useState<string | null>(null);
 
   // Editing state for rooms/containers
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
@@ -91,8 +94,14 @@ export default function StoragePage() {
     moveItem 
   } = useStorage(selectedContainerId);
 
+  const { subscription } = useSubscription();
+
   const activeLocation = locations.find(l => l.id === selectedLocationId);
   const activeRoom = activeLocation?.rooms?.find(r => r.id === selectedRoomId);
+
+  // Check if room and item quotas are reached
+  const isRoomQuotaReached = Boolean(subscription && subscription.maxRoomsQuota !== 9999 && subscription.usedRoomsCount >= subscription.maxRoomsQuota);
+  const isItemQuotaReached = Boolean(subscription && subscription.maxItemsQuota !== 999999 && subscription.usedItemsCount >= subscription.maxItemsQuota);
 
   const handleOpenAddModal = () => {
     setEditingItemId(null);
@@ -105,6 +114,7 @@ export default function StoragePage() {
     setItemMinThreshold(2);
     setItemCost(5.00);
     setItemType(0);
+    setItemErrorMessage(null);
     setActiveModal('item');
   };
 
@@ -128,6 +138,7 @@ export default function StoragePage() {
     setItemMinThreshold(item.minimumThreshold > 0 ? item.minimumThreshold : 2);
     setItemCost(item.unitCost > 0 ? item.unitCost : 5.00);
     setItemType(item.type ?? 0);
+    setItemErrorMessage(null);
     setActiveModal('item');
   };
 
@@ -135,6 +146,7 @@ export default function StoragePage() {
     e.stopPropagation();
     setEditingRoomId(room.id);
     setNewEntityName(room.name);
+    setModalErrorMessage(null);
     setActiveModal('editRoom');
   };
 
@@ -143,6 +155,7 @@ export default function StoragePage() {
     setEditingContainerId(container.id);
     setNewEntityName(container.name);
     setNewEntityKind(container.kind || 'Cabinet');
+    setModalErrorMessage(null);
     setActiveModal('editContainer');
   };
 
@@ -176,6 +189,7 @@ export default function StoragePage() {
   const handleSaveUnit = async () => {
     if (!newEntityName.trim()) return;
     try {
+      setModalErrorMessage(null);
       if (activeModal === 'editRoom' && editingRoomId !== null) {
         await updateRoom({ roomId: editingRoomId, name: newEntityName });
       } else if (activeModal === 'editContainer' && editingContainerId !== null) {
@@ -199,14 +213,18 @@ export default function StoragePage() {
       setNewEntityName('');
       setEditingRoomId(null);
       setEditingContainerId(null);
-    } catch (error) {
+      setModalErrorMessage(null);
+    } catch (error: any) {
       console.error('Failed to save unit:', error);
+      const errorMessage = error?.response?.data || error?.message || 'Failed to save entity. Please check your plan limits.';
+      setModalErrorMessage(errorMessage);
     }
   };
 
   const handleSaveItem = async () => {
     if (!selectedContainerId || !itemName.trim()) return;
     try {
+      setItemErrorMessage(null);
       const payload: any = {
         name: itemName,
         sku: itemSku || 'SKU-GEN-01',
@@ -229,8 +247,11 @@ export default function StoragePage() {
       setActiveModal('none');
       setEditingItemId(null);
       setItemName(''); setItemSku(''); setItemCategory(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00); setItemMinThreshold(2);
-    } catch (error) {
+      setItemErrorMessage(null);
+    } catch (error: any) {
       console.error('Failed to save item:', error);
+      const errorMessage = error?.response?.data || error?.message || 'Failed to save item. Check your plan item limits.';
+      setItemErrorMessage(errorMessage);
     }
   };
 
@@ -450,7 +471,10 @@ export default function StoragePage() {
             {viewLevel === 'locations' ? (
               <span className="text-xs text-slate-400 italic">Select a location to add rooms</span>
             ) : (
-              <button onClick={() => setActiveModal('roomOrContainer')} className="flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700">
+              <button 
+                onClick={() => { setModalErrorMessage(null); setActiveModal('roomOrContainer'); }} 
+                className="flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700"
+              >
                 <Plus className="size-3.5" /> {viewLevel === 'rooms' ? 'Add Room' : 'Add Storage Unit'}
               </button>
             )}
@@ -620,15 +644,33 @@ export default function StoragePage() {
             <p className="mt-1 text-xs text-slate-500">
               {viewLevel === 'rooms' ? 'Configure a new room within this facility location.' : 'Configure a storage compartment or bin.'}
             </p>
+
+            {/* Quota Warning Banner if room limit is reached */}
+            {viewLevel === 'rooms' && isRoomQuotaReached && (
+              <div className="mt-4 rounded-xl bg-amber-50 p-3.5 text-xs font-medium text-amber-800 border border-amber-200 flex flex-col gap-2">
+                <p>You have reached your plan limit ({subscription?.usedRoomsCount}/{subscription?.maxRoomsQuota} rooms used on {subscription?.planName} Plan).</p>
+                <a href="/settings?tab=billing" className="font-semibold text-amber-900 underline hover:text-amber-950">
+                  Upgrade your subscription in Workspace Settings →
+                </a>
+              </div>
+            )}
+
+            {/* Backend Error Message Banner */}
+            {modalErrorMessage && (
+              <div className="mt-4 rounded-xl bg-rose-50 p-3.5 text-xs font-medium text-rose-700 border border-rose-100">
+                {modalErrorMessage}
+              </div>
+            )}
             
             <div className="mt-4 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Name</label>
                 <input 
                   value={newEntityName} 
+                  disabled={viewLevel === 'rooms' && isRoomQuotaReached}
                   onChange={e => setNewEntityName(e.target.value)} 
                   placeholder={viewLevel === 'rooms' ? "e.g., Sterilization Room" : "e.g., Shelf 3 or Bin #4"} 
-                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
                 />
               </div>
               {viewLevel === 'containers' && (
@@ -646,7 +688,13 @@ export default function StoragePage() {
 
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setActiveModal('none')} className="h-9 rounded-md border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</button>
-              <button onClick={handleSaveUnit} className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">Save</button>
+              <button 
+                onClick={handleSaveUnit} 
+                disabled={(viewLevel === 'rooms' && isRoomQuotaReached) || !newEntityName.trim()}
+                className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>
@@ -657,6 +705,13 @@ export default function StoragePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Room Name</h3>
+            
+            {modalErrorMessage && (
+              <div className="mt-4 rounded-xl bg-rose-50 p-3.5 text-xs font-medium text-rose-700 border border-rose-100">
+                {modalErrorMessage}
+              </div>
+            )}
+
             <div className="mt-4">
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Room Name</label>
               <input 
@@ -678,6 +733,13 @@ export default function StoragePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Storage Unit</h3>
+            
+            {modalErrorMessage && (
+              <div className="mt-4 rounded-xl bg-rose-50 p-3.5 text-xs font-medium text-rose-700 border border-rose-100">
+                {modalErrorMessage}
+              </div>
+            )}
+
             <div className="mt-4 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Name</label>
@@ -714,53 +776,132 @@ export default function StoragePage() {
             </h3>
             <p className="mt-1 text-xs text-slate-500">Assign stock and configure local par levels for this bin.</p>
             
+            {/* Quota Warning Banner if item limit is reached */}
+            {editingItemId === null && isItemQuotaReached && (
+              <div className="mt-4 rounded-xl bg-amber-50 p-3.5 text-xs font-medium text-amber-800 border border-amber-200 flex flex-col gap-2">
+                <p>You have reached your plan limit ({subscription?.usedItemsCount}/{subscription?.maxItemsQuota} items used on {subscription?.planName} Plan).</p>
+                <a href="/settings?tab=billing" className="font-semibold text-amber-900 underline hover:text-amber-950">
+                  Upgrade your subscription in Workspace Settings →
+                </a>
+              </div>
+            )}
+
+            {/* Backend Error Message Banner */}
+            {itemErrorMessage && (
+              <div className="mt-4 rounded-xl bg-rose-50 p-3.5 text-xs font-medium text-rose-700 border border-rose-100">
+                {itemErrorMessage}
+              </div>
+            )}
+
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Item Name</label>
-                <input value={itemName} onChange={e => setItemName(e.target.value)} placeholder="e.g., Nitrile Gloves" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  value={itemName} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemName(e.target.value)} 
+                  placeholder="e.g., Nitrile Gloves" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Category</label>
-                <input value={itemCategory} onChange={e => setItemCategory(e.target.value)} placeholder="e.g., Medical Supplies, PPE & Safety" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  value={itemCategory} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemCategory(e.target.value)} 
+                  placeholder="e.g., Medical Supplies, PPE & Safety" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">SKU</label>
-                <input value={itemSku} onChange={e => setItemSku(e.target.value)} placeholder="GLV-LRG-01" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  value={itemSku} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemSku(e.target.value)} 
+                  placeholder="GLV-LRG-01" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Lot Number</label>
-                <input value={itemLot} onChange={e => setItemLot(e.target.value)} placeholder="LOT-99210" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  value={itemLot} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemLot(e.target.value)} 
+                  placeholder="LOT-99210" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Item Type</label>
-                <select value={itemType} onChange={e => setItemType(Number(e.target.value))} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white">
+                <select 
+                  value={itemType} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemType(Number(e.target.value))} 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white disabled:opacity-50"
+                >
                   <option value={0}>Consumable (Single-use)</option>
                   <option value={1}>Reusable (Asset/Tray)</option>
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Quantity</label>
-                <input type="number" value={itemQty} onChange={e => setItemQty(Number(e.target.value))} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  type="number" 
+                  value={itemQty} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemQty(Number(e.target.value))} 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Unit Cost ($)</label>
-                <input type="number" step="0.01" value={itemCost} onChange={e => setItemCost(e.target.value === '' ? '' : Number(e.target.value))} placeholder="5.00" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={itemCost} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemCost(e.target.value === '' ? '' : Number(e.target.value))} 
+                  placeholder="5.00" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Local Bin Minimum Threshold</label>
-                <input type="number" value={itemMinThreshold} onChange={e => setItemMinThreshold(e.target.value === '' ? '' : Number(e.target.value))} placeholder="2" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input 
+                  type="number" 
+                  value={itemMinThreshold} 
+                  disabled={editingItemId === null && isItemQuotaReached}
+                  onChange={e => setItemMinThreshold(e.target.value === '' ? '' : Number(e.target.value))} 
+                  placeholder="2" 
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                />
               </div>
               {Number(itemType) === 0 && (
                 <div>
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Expiration Date</label>
-                  <input type="date" value={itemExp} onChange={e => setItemExp(e.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                  <input 
+                    type="date" 
+                    value={itemExp} 
+                    disabled={editingItemId === null && isItemQuotaReached}
+                    onChange={e => setItemExp(e.target.value)} 
+                    className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
+                  />
                 </div>
               )}
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setActiveModal('none')} className="h-9 rounded-md border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</button>
-              <button onClick={handleSaveItem} className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700">Save Item</button>
+              <button 
+                onClick={handleSaveItem} 
+                disabled={(editingItemId === null && isItemQuotaReached) || !itemName.trim()}
+                className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Save Item
+              </button>
             </div>
           </div>
         </div>

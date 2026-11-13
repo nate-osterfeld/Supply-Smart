@@ -23,6 +23,7 @@ namespace SupplySmart.Integrations.DbContexts
         public DbSet<InventoryItem> InventoryItems { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
+        public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
 
         public SupplySmartDbContext(
             DbContextOptions<SupplySmartDbContext> options
@@ -228,6 +229,23 @@ namespace SupplySmart.Integrations.DbContexts
                     e.InventoryItemId,
                     e.Timestamp
                 });
+            });
+
+            modelBuilder.Entity<NotificationTemplate>(entity =>
+            {
+                entity.ToTable("NotificationTemplates");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.TriggerType).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.TemplateMarkdown).IsRequired();
+                entity.Property(e => e.AdditionalRecipients).HasMaxLength(2000);
+
+                entity.HasIndex(e => new { e.OrganizationId, e.TriggerType }).IsUnique();
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany(o => o.NotificationTemplates)
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
 
