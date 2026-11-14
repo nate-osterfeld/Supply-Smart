@@ -22,3 +22,5 @@ export * from './CreateContainerDto.ts'
 export * from './CreateItemDto.ts'
 export * from './UpdateItemDto.ts'
 export * from './MasterCatalogItemDto.ts'
+export * from './InventoryForecastDto';
+export * from './ForecastResponseDto';

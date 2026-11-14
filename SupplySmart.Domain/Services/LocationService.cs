@@ -565,10 +565,30 @@ namespace SupplySmart.Domain.Services
                 .ThenInclude(c => c.Room)
                 .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
 
-            if (item == null) return false;
+            if (item == null)
+            {
+                return false;
+            }
 
-            int oldQty = item.Quantity;
+            // Save quantity before change for forecasting and alerts
+            var quantityBefore = item.Quantity;
+            var quantityAfter = dto.Quantity;
+            var quantityChange = quantityAfter - quantityBefore;
 
+            var historicalItemName = item.Name;
+            var historicalSku = item.Sku;
+
+            string? transactionType = null;
+            if (quantityChange < 0)
+            {
+                transactionType = "checkout";
+            }
+            else if (quantityChange > 0)
+            {
+                transactionType = "restock";
+            }
+
+            // Update item fields
             item.Name = dto.Name;
             item.Sku = dto.Sku;
             item.LotNumber = dto.LotNumber;
@@ -579,7 +599,9 @@ namespace SupplySmart.Domain.Services
             item.UnitCost = dto.UnitCost;
             item.Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General";
 
-            var locationContext = item.Container != null ? $"{item.Container.Room.Name} › {item.Container.Name}" : "Unknown Location";
+            var locationContext = item.Container != null
+                ? $"{item.Container.Room.Name} › {item.Container.Name}"
+                : "Unknown Location";
 
             _context.AuditLogs.Add(new AuditLog
             {
@@ -591,10 +613,32 @@ namespace SupplySmart.Domain.Services
                 LocationName = locationContext
             });
 
+            if (transactionType != null)
+            {
+                _context.InventoryTransactions.Add(
+                    new InventoryTransaction
+                    {
+                        OrganizationId = organizationId,
+                        InventoryItemId = item.Id,
+                        TransactionType = transactionType,
+                        QuantityChange = quantityChange,
+                        QuantityBefore = quantityBefore,
+                        QuantityAfter = quantityAfter,
+                        Timestamp = DateTime.UtcNow,
+                        UserEmail = userEmail,
+                        ItemName = historicalItemName,
+                        Sku = historicalSku,
+                        Notes = transactionType == "checkout"
+                            ? $"Inventory decreased by {Math.Abs(quantityChange)} units."
+                            : $"Inventory increased by {quantityChange} units."
+                    }
+                );
+            }
+
             await _context.SaveChangesAsync();
 
             // Check and trigger email notifications if quantity crossed into low stock or out of stock
-            await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, oldQty, item);
+            await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, quantityBefore, item);
 
             return true;
         }

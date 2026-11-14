@@ -14,23 +14,30 @@ namespace SupplySmart.Integrations.DbContexts
     public sealed class SupplySmartDbContext : DbContext
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
+
         public DbSet<Organization> Organizations { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Location> Locations { get; set; }
         public DbSet<Room> Rooms { get; set; }
         public DbSet<Container> Containers { get; set; }
         public DbSet<InventoryItem> InventoryItems { get; set; }
-        public DbSet<AuditLog> AuditLogs {  get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
         public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
 
-        public SupplySmartDbContext(DbContextOptions<SupplySmartDbContext> options) : base(options)
+        public SupplySmartDbContext(
+            DbContextOptions<SupplySmartDbContext> options
+        ) : base(options)
         {
             _httpContextAccessor = new HttpContextAccessor();
             ChangeTracker.StateChanged += UpdateTimestamps;
             ChangeTracker.Tracked += UpdateTimestamps;
         }
 
-        public SupplySmartDbContext(DbContextOptions<SupplySmartDbContext> options, IHttpContextAccessor httpContextAccessor) : base(options)
+        public SupplySmartDbContext(
+            DbContextOptions<SupplySmartDbContext> options,
+            IHttpContextAccessor httpContextAccessor
+        ) : base(options)
         {
             _httpContextAccessor = httpContextAccessor;
             ChangeTracker.StateChanged += UpdateTimestamps;
@@ -55,6 +62,7 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
                 entity.Property(e => e.FullName).IsRequired().HasMaxLength(150);
+
                 entity.Property(e => e.Email)
                       .IsRequired()
                       .HasMaxLength(256);
@@ -123,7 +131,8 @@ namespace SupplySmart.Integrations.DbContexts
                       .HasForeignKey(e => e.RoomId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                // Self-referencing relationship for infinite nesting (Cabinet -> Shelf -> Bin)
+                // Self-referencing relationship for infinite nesting
+                // (Cabinet -> Shelf -> Bin)
                 entity.HasOne(e => e.ParentContainer)
                       .WithMany(c => c.SubContainers)
                       .HasForeignKey(e => e.ParentContainerId)
@@ -137,12 +146,13 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(250);
                 entity.Property(e => e.Sku).IsRequired().HasMaxLength(100);
-                entity.Property(e => e.UnitCost).HasColumnType("decimal(18,2)");
-                
+                entity.Property(e => e.UnitCost)
+                      .HasColumnType("decimal(18,2)");
+
                 entity.Property(e => e.Type)
-                    .HasConversion<string>()
-                    .HasMaxLength(50)
-                    .IsRequired();
+                      .HasConversion<string>()
+                      .HasMaxLength(50)
+                      .IsRequired();
 
                 entity.HasOne(e => e.Organization)
                       .WithMany(o => o.InventoryItems)
@@ -160,13 +170,65 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.ToTable("AuditLogs");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                entity.Property(e => e.UserEmail).IsRequired().HasMaxLength(256);
-                entity.Property(e => e.ActionType).HasMaxLength(50);
+                entity.Property(e => e.UserEmail)
+                      .IsRequired()
+                      .HasMaxLength(256);
+
+                entity.Property(e => e.ActionType)
+                      .HasMaxLength(50);
 
                 entity.HasOne(e => e.Organization)
                       .WithMany(o => o.AuditLogs)
                       .HasForeignKey(e => e.OrganizationId)
                       .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<InventoryTransaction>(entity =>
+            {
+                entity.ToTable("InventoryTransactions");
+
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.TransactionType)
+                      .IsRequired()
+                      .HasMaxLength(50);
+
+                entity.Property(e => e.UserEmail)
+                      .IsRequired()
+                      .HasMaxLength(256);
+
+                entity.Property(e => e.ItemName)
+                      .IsRequired()
+                      .HasMaxLength(250);
+
+                entity.Property(e => e.Sku)
+                      .IsRequired()
+                      .HasMaxLength(100);
+
+                entity.Property(e => e.Notes)
+                      .HasMaxLength(500);
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany()
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.InventoryItem)
+                      .WithMany()
+                      .HasForeignKey(e => e.InventoryItemId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasIndex(e => e.OrganizationId);
+                entity.HasIndex(e => e.InventoryItemId);
+                entity.HasIndex(e => e.Timestamp);
+
+                entity.HasIndex(e => new
+                {
+                    e.OrganizationId,
+                    e.InventoryItemId,
+                    e.Timestamp
+                });
             });
 
             modelBuilder.Entity<NotificationTemplate>(entity =>
@@ -187,12 +249,21 @@ namespace SupplySmart.Integrations.DbContexts
             });
         }
 
-        private void UpdateTimestamps(object? sender, EntityEntryEventArgs e)
+        private void UpdateTimestamps(
+            object? sender,
+            EntityEntryEventArgs e
+        )
         {
-            if (e.Entry.Entity is not IEntityBase entityWithTimeStamps) return;
+            if (e.Entry.Entity is not IEntityBase entityWithTimeStamps)
+            {
+                return;
+            }
 
             var now = DateTime.UtcNow;
-            var userName = GetFormattedUserName(_httpContextAccessor.HttpContext?.User?.Claims);
+
+            var userName = GetFormattedUserName(
+                _httpContextAccessor.HttpContext?.User?.Claims
+            );
 
             switch (e.Entry.State)
             {
@@ -200,22 +271,44 @@ namespace SupplySmart.Integrations.DbContexts
                     entityWithTimeStamps.LastUpdatedDateUtc = now;
                     entityWithTimeStamps.LastUpdatedBy = userName;
                     break;
+
                 case EntityState.Added:
                     entityWithTimeStamps.CreatedDateUtc = now;
                     entityWithTimeStamps.LastUpdatedDateUtc = now;
-                    if (string.IsNullOrWhiteSpace(entityWithTimeStamps.CreatedBy))
+
+                    if (string.IsNullOrWhiteSpace(
+                        entityWithTimeStamps.CreatedBy
+                    ))
+                    {
                         entityWithTimeStamps.CreatedBy = userName;
-                    if (string.IsNullOrWhiteSpace(entityWithTimeStamps.LastUpdatedBy))
+                    }
+
+                    if (string.IsNullOrWhiteSpace(
+                        entityWithTimeStamps.LastUpdatedBy
+                    ))
+                    {
                         entityWithTimeStamps.LastUpdatedBy = userName;
+                    }
+
                     break;
             }
         }
 
-        private static string GetFormattedUserName(IEnumerable<Claim>? claims)
+        private static string GetFormattedUserName(
+            IEnumerable<Claim>? claims
+        )
         {
-            if (claims == null) return "System/Unauthenticated";
+            if (claims == null)
+            {
+                return "System/Unauthenticated";
+            }
+
             var claimsList = claims.ToList();
-            var email = claimsList.FirstOrDefault(x => x.Type == ClaimTypes.Email)?.Value ?? "n/a";
+
+            var email = claimsList
+                .FirstOrDefault(x => x.Type == ClaimTypes.Email)
+                ?.Value ?? "n/a";
+
             return $"User ({email})";
         }
     }

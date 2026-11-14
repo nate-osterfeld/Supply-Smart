@@ -19,6 +19,7 @@ import StoragePage from './pages/storage/StoragePage';
 import CatalogPage from './pages/catalog/CatalogPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import ReportsPage from './pages/reports/ReportsPage';
+import ForecastPage from './pages/forecast/ForecastPage';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
@@ -186,6 +187,7 @@ export default function App() {
           {currentScreen === 'catalog' && <CatalogPage />}
           {currentScreen === 'reports' && <ReportsPage />}
           {currentScreen === 'settings' && <SettingsPage />}
+          {currentScreen === 'forecast' && <ForecastPage />}
         </main>
       </div>
     </div>

@@ -44,7 +44,7 @@ export class BaseApi {
                 const errorMsg = this.getErrorMsg(error);
                 if (error.response?.status === 401) {
                     localStorage.clear();
-                    window.location.replace('/login');
+                    window.location.replace('/');
                 }
                 return Promise.reject(new Error(errorMsg));
             }

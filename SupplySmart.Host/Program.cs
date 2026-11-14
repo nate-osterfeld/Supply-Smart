@@ -32,6 +32,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<ICatalogService, CatalogService>();
 builder.Services.AddHttpContextAccessor(); // Required for automatic audit logging timestamps
+builder.Services.AddScoped<IForecastService, ForecastService>();
 
 // Configure JWT settings
 var jwtSecret = builder.Configuration["JwtSettings:Secret"] ?? throw new InvalidOperationException("JWT Secret is missing.");
@@ -81,6 +82,7 @@ app.MapNotificationEndpoints();
 app.MapDashboardEndpoints();
 app.MapLocationEndpoints();
 app.MapCatalogEndpoints();
+app.MapForecastEndpoints();
 
 // Fallback routing for React Single Page Application (SPA) client-side routing
 app.MapFallbackToFile("index.html");
