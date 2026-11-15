@@ -102,6 +102,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithDescription("Relocates an inventory item to a different container and records an immutable audit ledger entry.")
                 .Produces(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status400BadRequest)
+                .Produces(StatusCodes.Status409Conflict)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -110,6 +111,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithName("UpdateInventoryItem")
                 .WithDescription("Updates an existing inventory item's details and logs an audit trail event.")
                 .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status409Conflict)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -118,6 +120,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithName("DeleteInventoryItem")
                 .WithDescription("Removes an inventory item from storage and logs an audit trail event.")
                 .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status409Conflict)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);

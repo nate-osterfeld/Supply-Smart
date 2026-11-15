@@ -592,6 +592,8 @@ namespace SupplySmart.Domain.Services
             item.MinimumThreshold = dto.MinimumThreshold;
             item.UnitCost = dto.UnitCost;
             item.Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General";
+            // Check the original quantity even when every submitted field matches our snapshot.
+            _context.Entry(item).Property(i => i.Quantity).IsModified = true;
 
             var locationContext = item.Container != null
                 ? $"{item.Container.Room.Name} › {item.Container.Name}"
