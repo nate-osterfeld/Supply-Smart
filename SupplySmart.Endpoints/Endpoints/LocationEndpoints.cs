@@ -261,7 +261,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> MoveItem(
+        public static async Task<Results<Ok, BadRequest<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> MoveItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -276,6 +276,10 @@ namespace SupplySmart.Endpoints.Endpoints
 
                 var success = await locationService.MoveItemAsync(orgId, itemId, dto.TargetContainerId, dto.Quantity, dto.MinimumThreshold, userEmail);
                 return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (ArgumentException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
             }
             catch (Exception ex)
             {

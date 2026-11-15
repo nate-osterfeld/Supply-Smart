@@ -506,14 +506,19 @@ namespace SupplySmart.Domain.Services
             }
             else
             {
-                item.Quantity -= moveQty;
-
                 var existingTargetItem = await _context.InventoryItems
                     .FirstOrDefaultAsync(i => i.OrganizationId == organizationId
                         && i.ContainerId == targetContainerId
                         && i.Sku == item.Sku
                         && i.LotNumber == item.LotNumber
                         && i.ExpirationDate == item.ExpirationDate);
+
+                if (existingTargetItem != null && (long)existingTargetItem.Quantity + moveQty > int.MaxValue)
+                {
+                    throw new ArgumentException("The transfer would exceed the destination's maximum quantity.");
+                }
+
+                item.Quantity -= moveQty;
 
                 if (existingTargetItem != null)
                 {

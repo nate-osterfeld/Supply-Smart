@@ -101,6 +101,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithName("MoveItemBetweenContainers")
                 .WithDescription("Relocates an inventory item to a different container and records an immutable audit ledger entry.")
                 .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
