@@ -8,6 +8,7 @@ on:
       - '**'
       - '!staging'
       - '!review/room-container-permissions'
+      - '!review/forecast-arithmetic'
 
 jobs:
   build-and-deploy:
