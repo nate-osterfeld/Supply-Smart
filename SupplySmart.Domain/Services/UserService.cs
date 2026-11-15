@@ -46,9 +46,12 @@ namespace SupplySmart.Domain.Services
                 throw new InvalidOperationException("A user with this email address already exists.");
             }
 
-            if (!Enum.TryParse<UserRole>(dto.Role, true, out var parsedRole))
+            var requestedRole = dto.Role?.Trim();
+            if (!Enum.TryParse<UserRole>(requestedRole, true, out var parsedRole) ||
+                !Enum.IsDefined(parsedRole) ||
+                !string.Equals(requestedRole, parsedRole.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                parsedRole = UserRole.Manager;
+                throw new InvalidOperationException("Choose an explicit role: Admin, Manager, or Staff.");
             }
 
             // Generate a secure random temporary password
