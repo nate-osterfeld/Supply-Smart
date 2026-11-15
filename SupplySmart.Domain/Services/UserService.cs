@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using SupplySmart.Integrations.Models.Data;
+using System.Security.Cryptography;
 using SupplySmart.Integrations.Models.DTO;
 using SupplySmart.Integrations.Repositories;
 
@@ -95,8 +96,7 @@ namespace SupplySmart.Domain.Services
         private string GenerateSecureTempPassword()
         {
             const string chars = "ABCDEFGHJKLMNOPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789!@#$%^&*";
-            var random = new Random();
-            return new string(Enumerable.Repeat(chars, 12).Select(s => s[random.Next(s.Length)]).ToArray());
+            return RandomNumberGenerator.GetString(chars, 12);
         }
 
         public async Task<bool> DeleteUserAsync(int organizationId, int targetUserId, string adminEmail)
