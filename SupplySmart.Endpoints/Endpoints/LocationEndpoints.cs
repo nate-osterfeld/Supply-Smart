@@ -277,6 +277,10 @@ namespace SupplySmart.Endpoints.Endpoints
                 var success = await locationService.MoveItemAsync(orgId, itemId, dto.TargetContainerId, dto.Quantity, dto.MinimumThreshold, userEmail);
                 return success ? TypedResults.Ok() : TypedResults.NotFound();
             }
+            catch (InvalidOperationException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 return TypedResults.BadRequest<object>(new { message = ex.Message });

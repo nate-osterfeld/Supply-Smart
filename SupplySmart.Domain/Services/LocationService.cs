@@ -398,23 +398,7 @@ namespace SupplySmart.Domain.Services
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
-            var org = await _context.Organizations
-                .AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == organizationId);
-
-            if (org == null) throw new InvalidOperationException("Organization not found.");
-
-            var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
-            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
-
-            var currentItemsCount = await _context.InventoryItems
-                .CountAsync(i => i.OrganizationId == organizationId);
-
-            if (currentItemsCount >= maxItemsQuota)
-            {
-                throw new InvalidOperationException(
-                    $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
-            }
+            await EnsureItemQuotaAvailableAsync(organizationId);
 
             var item = new InventoryItem
             {
@@ -516,6 +500,11 @@ namespace SupplySmart.Domain.Services
                 if (existingTargetItem != null && (long)existingTargetItem.Quantity + moveQty > int.MaxValue)
                 {
                     throw new ArgumentException("The transfer would exceed the destination's maximum quantity.");
+                }
+
+                if (existingTargetItem is null)
+                {
+                    await EnsureItemQuotaAvailableAsync(organizationId);
                 }
 
                 item.Quantity -= moveQty;
@@ -672,6 +661,22 @@ namespace SupplySmart.Domain.Services
             _context.InventoryItems.Remove(item);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        private async Task EnsureItemQuotaAvailableAsync(int organizationId)
+        {
+            var org = await _context.Organizations.AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == organizationId);
+            if (org == null) throw new InvalidOperationException("Organization not found.");
+
+            var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
+            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
+            var currentItemsCount = await _context.InventoryItems.CountAsync(i => i.OrganizationId == organizationId);
+            if (currentItemsCount >= maxItemsQuota)
+            {
+                throw new InvalidOperationException(
+                    $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
+            }
         }
     }
 }
