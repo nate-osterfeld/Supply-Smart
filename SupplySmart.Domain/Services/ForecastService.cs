@@ -104,8 +104,9 @@ public class ForecastService : IForecastService
                     ? (double)totalHistoricalUsage / LookbackDays
                     : 0;
 
+            // Keep aggregate demand wide and avoid floating-point rounding of whole units.
             var predictedDemand = (long)Math.Ceiling(
-                averageDailyUsage * forecastDays
+                (decimal)totalHistoricalUsage * forecastDays / LookbackDays
             );
 
             var projectedQuantity =

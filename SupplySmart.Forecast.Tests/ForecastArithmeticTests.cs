@@ -74,7 +74,8 @@ public class ForecastArithmeticTests
     [Theory]
     [InlineData(7, 8L)]
     [InlineData(14, 15L)]
-    public async Task OrdinaryUsageRoundsUpFractionalUnits(int days, long demand)
+    [InlineData(30, 31L)]
+    public async Task OrdinaryUsageRoundsUpFractionalUnitsAndPreservesWholeUnits(int days, long demand)
     {
         await using var db = await CreateDatabase();
         (await db.InventoryItems.SingleAsync()).Quantity = 100;
