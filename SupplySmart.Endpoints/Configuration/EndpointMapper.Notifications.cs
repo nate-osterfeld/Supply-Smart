@@ -30,10 +30,12 @@ public static partial class EndpointMapper
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         notificationEndpoints.MapPost("/test", NotificationEndpoints.SendTestAlert)
+            .RequireAuthorization(policy => policy.RequireRole("Admin"))
             .WithName("SendTestNotificationAlert")
             .WithDescription("Dispatches a live test alert email populated with sample data to verify email delivery and recipient routing.")
             .Produces<object>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
     }
 }
