@@ -90,7 +90,7 @@ public class ForecastService : IForecastService
              * Math.Abs converts this to actual demand.
              */
             var totalHistoricalUsage = itemCheckouts
-                .Sum(t => Math.Abs(t.QuantityChange));
+                .Sum(t => Math.Abs((long)t.QuantityChange));
 
             /*
              * Baseline forecast:
@@ -104,7 +104,7 @@ public class ForecastService : IForecastService
                     ? (double)totalHistoricalUsage / LookbackDays
                     : 0;
 
-            var predictedDemand = (int)Math.Ceiling(
+            var predictedDemand = (long)Math.Ceiling(
                 averageDailyUsage * forecastDays
             );
 
