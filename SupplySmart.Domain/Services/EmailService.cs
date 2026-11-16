@@ -42,7 +42,10 @@ public class EmailService : IEmailService
             client.EnableSsl = true;
         }
 
-        var loginUrl = $"{baseUrl}";
+        var loginUrl = WebUtility.HtmlEncode(baseUrl);
+        var encodedName = WebUtility.HtmlEncode(fullName);
+        var encodedEmail = WebUtility.HtmlEncode(toEmail);
+        var encodedPassword = WebUtility.HtmlEncode(tempPassword);
 
         var mailMessage = new MailMessage
         {
@@ -51,10 +54,10 @@ public class EmailService : IEmailService
             IsBodyHtml = true,
             Body = $@"
             <div style='font-family: Arial, sans-serif; color: #172033; line-height: 1.5;'>
-                <p>Hello {fullName},</p>
+                <p>Hello {encodedName},</p>
                 <p>You have been invited to join SupplySmart.</p>
-                <p>Your login email is: <strong>{toEmail}</strong></p>
-                <p>Your temporary password is: <strong>{tempPassword}</strong></p>
+                <p>Your login email is: <strong>{encodedEmail}</strong></p>
+                <p>Your temporary password is: <strong>{encodedPassword}</strong></p>
                 <p>Please log in and update your password by clicking the link below:</p>
                 <p style='margin: 24px 0;'>
                     <a href='{loginUrl}' style='background-color: #172033; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>
