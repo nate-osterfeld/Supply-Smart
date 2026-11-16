@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SupplySmart.Domain.Services;
 using SupplySmart.Endpoints.Configuration;
+using SupplySmart.Endpoints.Security;
 using SupplySmart.Host.Authentication;
 using SupplySmart.Integrations.DbContexts;
 using SupplySmart.Integrations.Repositories;
@@ -35,6 +36,7 @@ builder.Services.AddScoped<ICatalogService, CatalogService>();
 builder.Services.AddHttpContextAccessor(); // Required for automatic audit logging timestamps
 builder.Services.AddScoped<IForecastService, ForecastService>();
 builder.Services.AddScoped<CurrentUserJwtBearerEvents>();
+builder.Services.AddSingleton(new LoginAttemptLimiter(TimeProvider.System));
 
 // Configure JWT settings
 var jwtSecret = builder.Configuration["JwtSettings:Secret"] ?? throw new InvalidOperationException("JWT Secret is missing.");
