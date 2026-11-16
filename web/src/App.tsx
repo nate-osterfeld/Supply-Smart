@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -22,6 +24,8 @@ import ReportsPage from './pages/reports/ReportsPage';
 import ForecastPage from './pages/forecast/ForecastPage';
 
 export default function App() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
 
   useEffect(() => {
@@ -129,9 +133,11 @@ export default function App() {
 
         <div className="border-t border-slate-200/80 p-4">
           <button 
-            onClick={() => {
+            onClick={async () => {
+              await queryClient.cancelQueries();
+              queryClient.clear();
               localStorage.clear();
-              navigateTo('auth');
+              navigate('/', { replace: true });
             }}
             className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-50 transition-colors group"
             title="Click to sign out"
