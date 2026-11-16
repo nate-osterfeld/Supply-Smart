@@ -16,7 +16,7 @@ using SupplySmart.Integrations.Models.DTO;
 
 namespace SupplySmart.Tests;
 
-public sealed class SettingsApp : WebApplicationFactory<Program>
+public sealed class SettingsApp(Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection connection = new("Data Source=:memory:");
     public FakeEmail Email { get; } = new();
@@ -36,6 +36,7 @@ public sealed class SettingsApp : WebApplicationFactory<Program>
             services.AddDbContext<SupplySmartDbContext>(options => options.UseSqlite(connection));
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(Email);
+            configureServices?.Invoke(services);
         });
     }
 
