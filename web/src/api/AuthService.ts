@@ -4,6 +4,7 @@ import type { RegisterDto, LoginDto, AuthResponseDto, LocationDto } from '../mod
 export interface IAuthService {
     login(dto: LoginDto): Promise<AuthResponseDto>;
     register(dto: RegisterDto): Promise<AuthResponseDto>;
+    logout(): Promise<void>;
     getLocations(): Promise<LocationDto[]>;
 }
 
@@ -23,6 +24,10 @@ export class AuthService extends BaseApi implements IAuthService {
     public register = async (dto: RegisterDto): Promise<AuthResponseDto> => {
         const response = await this.post<AuthResponseDto>(`${this.endpoint}/register`, dto);
         return response.data;
+    };
+
+    public logout = async (): Promise<void> => {
+        await this.post<void>(`${this.endpoint}/logout`);
     };
 
     public getLocations = async (): Promise<LocationDto[]> => {

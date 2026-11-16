@@ -31,6 +31,14 @@ namespace SupplySmart.Endpoints.Configuration
                 .Produces(StatusCodes.Status429TooManyRequests)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
+            authEndpoints.MapPost("/logout", AuthEndpoints.Logout)
+                .WithName("LogoutUser")
+                .WithDescription("Ends all sessions belonging to the authenticated account.")
+                .RequireAuthorization()
+                .Produces(StatusCodes.Status204NoContent)
+                .Produces(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
+
             authEndpoints.MapGet("/locations", AuthEndpoints.GetLocations)
                 .WithName("GetTenantLocations")
                 .WithDescription("Retrieves all physical stores/branches tied to the authenticated user's organization.")

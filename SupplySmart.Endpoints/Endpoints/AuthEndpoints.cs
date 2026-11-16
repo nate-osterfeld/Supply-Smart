@@ -62,6 +62,25 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
+        public static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> Logout(
+            ClaimsPrincipal claimsPrincipal,
+            IAuthService authService,
+            ILogger<AuthEndpoints> logger)
+        {
+            if (!int.TryParse(claimsPrincipal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return TypedResults.Unauthorized();
+            try
+            {
+                await authService.LogoutAsync(userId);
+                return TypedResults.NoContent();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error ending account sessions.");
+                return TypedResults.Problem("Unable to sign out. Please try again.");
+            }
+        }
+
         public static async Task<Results<Ok<List<LocationDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetLocations(
             ClaimsPrincipal claimsPrincipal,
             IAuthService authService,

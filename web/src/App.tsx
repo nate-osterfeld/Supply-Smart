@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { AuthService } from './api/AuthService';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -27,6 +28,8 @@ export default function App() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('supplysmart_token');
@@ -134,13 +137,23 @@ export default function App() {
         <div className="border-t border-slate-200/80 p-4">
           <button 
             onClick={async () => {
-              await queryClient.cancelQueries();
-              queryClient.clear();
-              localStorage.clear();
-              navigate('/', { replace: true });
+              setIsSigningOut(true);
+              setSignOutError('');
+              try {
+                await new AuthService().logout();
+                await queryClient.cancelQueries();
+                queryClient.clear();
+                localStorage.clear();
+                navigate('/', { replace: true });
+              } catch {
+                setSignOutError('Sign-out failed. Please try again.');
+              } finally {
+                setIsSigningOut(false);
+              }
             }}
+            disabled={isSigningOut}
             className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-50 transition-colors group"
-            title="Click to sign out"
+            title="Sign out on all devices"
           >
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
               {initials}
@@ -151,6 +164,7 @@ export default function App() {
             </div>
             <ChevronDown className="size-4 text-slate-400 transition-transform group-hover:translate-y-0.5" />
           </button>
+          {signOutError && <p role="alert" className="mt-2 px-2 text-xs text-red-700">{signOutError}</p>}
         </div>
       </aside>
 

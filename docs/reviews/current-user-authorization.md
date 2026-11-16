@@ -6,4 +6,4 @@ After normal signature/expiry validation, authentication now checks the current 
 
 Six integration cases cover deleted-admin reads/invitations, fresh-login rejection, demotion, tenant reassignment, and unchanged Admin/Manager/Staff accounts. Three stale-token cases failed before the fix; all six pass afterward. Tests use real sign-in tokens, SQLite and fake email.
 
-No token-format or database-schema migration is required. Logout revocation, password-change invalidation, role changes that later reverse, and the planned HttpOnly-cookie/CSRF transition require separate session work. This check does not claim to solve those cases.
+This initial account lookup did not require a token or schema change. The branch now also includes [security stamps](session-security-stamps.md) and [server-confirmed sign-out](server-sign-out.md), which handle password/security changes and logout. The security-stamp migration must be applied before deploying the current branch, and existing sessions must sign in again. The HttpOnly-cookie/CSRF transition remains separate work.

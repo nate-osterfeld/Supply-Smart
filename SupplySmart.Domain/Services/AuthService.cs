@@ -8,6 +8,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace SupplySmart.Domain.Services
 {
@@ -15,6 +16,7 @@ namespace SupplySmart.Domain.Services
     {
         Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
         Task<AuthResponseDto> LoginAsync(LoginDto dto);
+        Task LogoutAsync(int userId);
         Task<List<LocationDto>> GetLocationsForUserAsync(int organizationId);
     }
 
@@ -136,6 +138,14 @@ namespace SupplySmart.Domain.Services
                 OrganizationId = user.OrganizationId,
                 Locations = locationDtos
             };
+        }
+
+        public async Task LogoutAsync(int userId)
+        {
+            var stamp = Guid.NewGuid();
+            // Update only the revocation stamp, without writing back a stale account snapshot.
+            await _userRepo.GetQueryable().Where(u => u.Id == userId)
+                .ExecuteUpdateAsync(update => update.SetProperty(u => u.SecurityStamp, stamp));
         }
 
         public async Task<List<LocationDto>> GetLocationsForUserAsync(int organizationId)
