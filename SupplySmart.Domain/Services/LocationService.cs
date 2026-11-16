@@ -398,6 +398,7 @@ namespace SupplySmart.Domain.Services
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
+            ValidateItemValues(dto.Quantity, dto.MinimumThreshold, dto.UnitCost, dto.Type);
             await EnsureItemQuotaAvailableAsync(organizationId);
 
             var item = new InventoryItem
@@ -461,6 +462,11 @@ namespace SupplySmart.Domain.Services
                 .FirstOrDefaultAsync(c => c.Id == targetContainerId && c.Room.Location.OrganizationId == organizationId);
 
             if (item == null || targetContainer == null) return false;
+
+            if (minimumThreshold < 0)
+            {
+                throw new ArgumentException("Minimum threshold cannot be negative.");
+            }
 
             int oldQty = item.Quantity;
             int moveQty = quantityToMove ?? item.Quantity;
@@ -564,6 +570,8 @@ namespace SupplySmart.Domain.Services
                 return false;
             }
 
+            ValidateItemValues(dto.Quantity, dto.MinimumThreshold, dto.UnitCost, dto.Type);
+
             // Save quantity before change for forecasting and alerts
             var quantityBefore = item.Quantity;
             var quantityAfter = dto.Quantity;
@@ -663,6 +671,19 @@ namespace SupplySmart.Domain.Services
             _context.InventoryItems.Remove(item);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        private static void ValidateItemValues(int quantity, int minimumThreshold, decimal unitCost, int type)
+        {
+            if (quantity < 0)
+                throw new ArgumentException("Quantity cannot be negative.");
+            if (minimumThreshold < 0)
+                throw new ArgumentException("Minimum threshold cannot be negative.");
+            // Match the decimal(18,2) column so an invalid price never reaches persistence.
+            if (unitCost < 0 || unitCost > 9999999999999999.99m)
+                throw new ArgumentException("Unit cost must be between 0 and 9999999999999999.99.");
+            if (!Enum.IsDefined((ItemType)type))
+                throw new ArgumentException("Item type must be Consumable (0) or Reusable (1).");
         }
 
         private async Task EnsureItemQuotaAvailableAsync(int organizationId)

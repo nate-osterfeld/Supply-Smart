@@ -239,7 +239,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok<InventoryItemDto>, UnauthorizedHttpResult, ProblemHttpResult>> AddItem(
+        public static async Task<Results<Ok<InventoryItemDto>, BadRequest<object>, UnauthorizedHttpResult, ProblemHttpResult>> AddItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -254,6 +254,10 @@ namespace SupplySmart.Endpoints.Endpoints
 
                 var item = await locationService.AddItemAsync(orgId, containerId, dto, userEmail);
                 return TypedResults.Ok(item);
+            }
+            catch (ArgumentException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -297,7 +301,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok, Conflict<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateItem(
+        public static async Task<Results<Ok, BadRequest<object>, Conflict<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -312,6 +316,10 @@ namespace SupplySmart.Endpoints.Endpoints
 
                 var success = await locationService.UpdateItemAsync(orgId, itemId, dto, userEmail);
                 return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (ArgumentException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
             }
             catch (DbUpdateConcurrencyException)
             {

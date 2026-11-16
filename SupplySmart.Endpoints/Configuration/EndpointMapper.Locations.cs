@@ -94,6 +94,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithName("AddItemToContainer")
                 .WithDescription("Adds a new inventory item to a specific container and logs an audit trail event.")
                 .Produces<InventoryItemDto>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 
@@ -111,6 +112,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithName("UpdateInventoryItem")
                 .WithDescription("Updates an existing inventory item's details and logs an audit trail event.")
                 .Produces(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status409Conflict)
                 .Produces(StatusCodes.Status404NotFound)
                 .Produces(StatusCodes.Status401Unauthorized)
