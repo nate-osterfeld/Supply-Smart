@@ -162,6 +162,7 @@ namespace SupplySmart.Domain.Services
                 new Claim(ClaimTypes.Name, user.FullName),
                 new Claim(ClaimTypes.Role, user.Role.ToString()),
                 new Claim("OrganizationId", organizationId.ToString()),
+                new Claim("SecurityStamp", user.SecurityStamp.ToString("N")),
                 new Claim(JwtRegisteredClaimNames.GivenName, user.FullName)
             };
 

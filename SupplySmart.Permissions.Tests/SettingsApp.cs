@@ -21,13 +21,14 @@ public sealed class SettingsApp(Action<IServiceCollection>? configureServices = 
     private readonly SqliteConnection connection = new("Data Source=:memory:");
     public FakeEmail Email { get; } = new();
     public const string Password = "Local-test-password-423!";
+    public const string JwtSecret = "local-tests-only-signing-key-at-least-sixty-four-characters-123456789";
     private bool seeded;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         connection.Open();
         builder.UseEnvironment("Testing");
-        builder.UseSetting("JwtSettings:Secret", "local-tests-only-signing-key-at-least-sixty-four-characters-123456789");
+        builder.UseSetting("JwtSettings:Secret", JwtSecret);
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<SupplySmartDbContext>();
