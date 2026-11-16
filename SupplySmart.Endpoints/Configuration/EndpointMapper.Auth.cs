@@ -24,6 +24,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .WithName("LoginUser")
                 .WithDescription("Verifies user credentials and returns a signed JWT token.")
                 .Produces<AuthResponseDto>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status401Unauthorized)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
 

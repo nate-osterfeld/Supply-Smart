@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using SupplySmart.Domain.Services;
 using SupplySmart.Integrations.Models.DTO;
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 
 namespace SupplySmart.Endpoints.Endpoints
 {
@@ -19,6 +20,10 @@ namespace SupplySmart.Endpoints.Endpoints
                 var response = await authService.RegisterAsync(dto);
                 return TypedResults.Ok(response);
             }
+            catch (ValidationException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
             catch (InvalidOperationException ex)
             {
                 logger.LogWarning(ex, "Registration failed: {Message}", ex.Message);
@@ -31,7 +36,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok<AuthResponseDto>, UnauthorizedHttpResult, ProblemHttpResult>> Login(
+        public static async Task<Results<Ok<AuthResponseDto>, BadRequest<object>, UnauthorizedHttpResult, ProblemHttpResult>> Login(
             LoginDto dto,
             IAuthService authService,
             ILogger<AuthEndpoints> logger)
@@ -40,6 +45,10 @@ namespace SupplySmart.Endpoints.Endpoints
             {
                 var response = await authService.LoginAsync(dto);
                 return TypedResults.Ok(response);
+            }
+            catch (ValidationException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
             }
             catch (UnauthorizedAccessException ex)
             {

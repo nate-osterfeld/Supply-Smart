@@ -177,6 +177,8 @@ export default function AuthPage() {
                     placeholder="Password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    minLength={mode === 'sign-in' ? undefined : 12}
+                    maxLength={1024}
                     required 
                   />
                   <button 

@@ -7,6 +7,7 @@ using SupplySmart.Integrations.Repositories;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.ComponentModel.DataAnnotations;
 
 namespace SupplySmart.Domain.Services
 {
@@ -42,6 +43,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
+            Validator.ValidateObject(dto, new ValidationContext(dto), validateAllProperties: true);
             var existingUser = await _userRepo.GetByConditionAsync(u => u.Email == dto.Email);
             if (existingUser != null)
             {
@@ -102,6 +104,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
         {
+            Validator.ValidateObject(dto, new ValidationContext(dto), validateAllProperties: true);
             var user = await _userRepo.GetByConditionAsync(u => u.Email == dto.Email, includes: new[] { "Organization" });
             if (user == null)
             {
