@@ -130,7 +130,13 @@ namespace SupplySmart.Domain.Services
                 _ => string.Empty
             };
 
-            if (string.IsNullOrWhiteSpace(_secretKey) || normalizedPlan == "Free" || string.IsNullOrWhiteSpace(priceId))
+            if (normalizedPlan != "Free" &&
+                (string.IsNullOrWhiteSpace(_secretKey) || string.IsNullOrWhiteSpace(priceId)))
+            {
+                throw new InvalidOperationException("Paid subscriptions are unavailable until Stripe billing is configured.");
+            }
+
+            if (normalizedPlan == "Free")
             {
                 ApplyLocalPlanUpdate(org, normalizedPlan, targetRoomsQuota, targetItemsQuota, userEmail);
                 await _context.SaveChangesAsync();
