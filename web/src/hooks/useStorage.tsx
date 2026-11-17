@@ -10,14 +10,13 @@ export function useStorage(containerId?: number) {
         queryKey: ['locations-hierarchy'],
         queryFn: () => service.getLocations(),
         retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token'),
     });
 
     const itemsQuery = useQuery({
         queryKey: ['container-items', containerId],
         queryFn: () => service.getContainerItems(containerId),
         retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token') && !!containerId,
+        enabled: !!containerId,
     });
 
     const createLocationMutation = useMutation({

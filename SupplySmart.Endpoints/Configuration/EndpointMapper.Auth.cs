@@ -14,6 +14,15 @@ namespace SupplySmart.Endpoints.Configuration
         {
             var authEndpoints = app.MapGroup("/api/auth").WithTags("Authentication");
 
+            authEndpoints.MapGet("/session", AuthEndpoints.GetBrowserSession)
+                .WithName("GetBrowserSession");
+            var browser = authEndpoints.MapGroup("/session").WithMetadata(new BrowserSession());
+            browser.MapPost("/login", AuthEndpoints.Login)
+                .AddEndpointFilter<LoginRateLimitFilter>()
+                .WithName("SignInBrowser");
+            browser.MapPost("/register", AuthEndpoints.Register)
+                .WithName("RegisterFromBrowser");
+
             authEndpoints.MapPost("/register", AuthEndpoints.Register)
                 .WithName("RegisterOrganization")
                 .WithDescription("Provisions a new tenant organization, root admin user, and initial location.")

@@ -22,6 +22,7 @@ namespace SupplySmart.Domain.Services
 
     public class AuthService : IAuthService
     {
+        public static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(7);
         private readonly IBaseRepository<Organization> _orgRepo;
         private readonly IBaseRepository<User> _userRepo;
         private readonly IBaseRepository<Location> _locationRepo;
@@ -173,13 +174,14 @@ namespace SupplySmart.Domain.Services
                 new Claim(ClaimTypes.Role, user.Role.ToString()),
                 new Claim("OrganizationId", organizationId.ToString()),
                 new Claim("SecurityStamp", user.SecurityStamp.ToString("N")),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
                 new Claim(JwtRegisteredClaimNames.GivenName, user.FullName)
             };
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddDays(7),
+                Expires = DateTime.UtcNow.Add(TokenLifetime),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 

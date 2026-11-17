@@ -6,4 +6,4 @@ Each user now has a random SecurityStamp. Login and registration include it in t
 
 Deployment requires the AddUserSecurityStamp migration before starting the new app. It adds one non-null uniqueidentifier column with NEWID() backfill/default; no existing rows are deleted. Older tokens without the claim are rejected, so existing users must sign in again once. No live migration is run by this review. This is account-level revocation, not a per-device session store, and it does not cancel a request that already passed authentication.
 
-Tests reproduce password replacement and role restoration bypasses with actual login tokens, exercise synchronous/asynchronous writes, and preserve ordinary display-name updates. The SQL Server model/migration can be checked without connecting to a database. Cookie transport and CSRF remain separate work.
+Tests cover password replacement, role restoration, synchronous and asynchronous saves, and ordinary display-name updates. The SQL Server model and migration are checked offline. See [browser session and CSRF protection](browser-sessions.md).

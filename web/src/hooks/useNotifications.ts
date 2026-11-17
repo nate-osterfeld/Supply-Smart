@@ -10,7 +10,6 @@ export function useNotifications() {
     const templatesQuery = useQuery({
         queryKey: ['notification-templates'],
         queryFn: () => service.getTemplates(),
-        enabled: !!localStorage.getItem('supplysmart_token'),
     });
 
     const updateMutation = useMutation({

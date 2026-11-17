@@ -8,14 +8,12 @@ export function useCatalog() {
         queryKey: ['master-catalog'],
         queryFn: () => service.getMasterCatalog(),
         retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token'),
     });
 
     const auditLogsQuery = useQuery({
         queryKey: ['compliance-audit-logs'],
         queryFn: () => service.getAuditLogs(),
         retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token'),
     });
 
     return {

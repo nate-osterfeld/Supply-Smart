@@ -1,7 +1,8 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useNavigate } from 'react-router-dom';
-import type { AuthResponseDto, LocationDto } from '../../models';
+import type { LocationDto } from '../../models';
 
 type IconName = 'package' | 'sparkles' | 'eye' | 'eyeOff' | 'arrowRight' | 'lock' | 'mapPin' | 'check' | 'chevronRight' | 'shield';
 
@@ -41,16 +42,16 @@ function Icon({ name, className = 'size-5' }: IconProps) {
 export default function AuthPage() {
   const navigate = useNavigate();
   const { login, register } = useAuth();
+  const user = useCurrentUser();
 
   useEffect(() => {
-    const token = localStorage.getItem('supplysmart_token');
-    const locationId = localStorage.getItem('supplysmart_location_id');
-    if (token && locationId) {
+    const locationId = Number(sessionStorage.getItem('supplysmart_location_id'));
+    if (user?.locations.some(location => location.id === locationId)) {
       navigate('/dashboard', { replace: true });
     }
-  }, [navigate]);
+  }, [user, navigate]);
   
-  const [step, setStep] = useState<'auth' | 'locations'>('auth');
+  const step = user ? 'locations' : 'auth';
   const [mode, setMode] = useState<'sign-in' | 'create'>('sign-in');
   const formError = mode === 'sign-in' ? login.error : register.error;
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -62,32 +63,22 @@ export default function AuthPage() {
   const [adminFullName, setAdminFullName] = useState<string>('');
 
   // Response session data
-  const [authResponse, setAuthResponse] = useState<AuthResponseDto | null>(null);
-  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(
+    () => (user?.locations.find(location => location.isPrimary) ?? user?.locations[0])?.id ?? null
+  );
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (mode === 'sign-in') {
-      login.mutate({ email, password }, {
-        onSuccess: handleAuthSuccess
-      });
+      login.mutate({ email, password });
     } else {
-      register.mutate({ organizationName: orgName, adminFullName, email, password }, {
-        onSuccess: handleAuthSuccess
-      });
+      register.mutate({ organizationName: orgName, adminFullName, email, password });
     }
-  };
-
-  const handleAuthSuccess = (data: AuthResponseDto) => {
-    setAuthResponse(data);
-    const primary = data.locations?.find((l: LocationDto) => l.isPrimary) || data.locations?.[0];
-    if (primary) setSelectedLocationId(primary.id);
-    setStep('locations');
   };
 
   const handleLaunchWorkspace = () => {
     if (!selectedLocationId) return;
-    localStorage.setItem('supplysmart_location_id', selectedLocationId.toString());
+    sessionStorage.setItem('supplysmart_location_id', selectedLocationId.toString());
     navigate('/dashboard');
   };
 
@@ -203,7 +194,7 @@ export default function AuthPage() {
           ) : (
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-3">
-                {authResponse?.locations?.map((loc: LocationDto) => (
+                {user?.locations.map((loc: LocationDto) => (
                   <button 
                     key={loc.id} 
                     type="button" 

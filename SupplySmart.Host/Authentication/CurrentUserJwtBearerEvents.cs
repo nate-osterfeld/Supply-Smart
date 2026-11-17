@@ -1,12 +1,21 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using SupplySmart.Endpoints.Security;
 using SupplySmart.Integrations.DbContexts;
 
 namespace SupplySmart.Host.Authentication;
 
 public sealed class CurrentUserJwtBearerEvents(SupplySmartDbContext db) : JwtBearerEvents
 {
+    public override Task MessageReceived(MessageReceivedContext context)
+    {
+        if (context.Request.Path.StartsWithSegments("/api") &&
+            context.Request.Cookies.TryGetValue(BrowserSession.CookieName, out var token))
+            context.Token = token;
+        return Task.CompletedTask;
+    }
+
     public override async Task TokenValidated(TokenValidatedContext context)
     {
         // A valid signature does not prove the account still has these permissions.

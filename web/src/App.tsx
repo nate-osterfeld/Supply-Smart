@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { AuthService } from './api/AuthService';
+import { sessionChanged } from './api/browserSession';
+import { useCurrentUser } from './hooks/useCurrentUser';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -16,7 +17,6 @@ import {
   User
 } from 'lucide-react';
 
-import AuthPage from './pages/auth/AuthPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import StoragePage from './pages/storage/StoragePage';
 import CatalogPage from './pages/catalog/CatalogPage';
@@ -26,24 +26,17 @@ import ForecastPage from './pages/forecast/ForecastPage';
 
 export default function App() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const user = useCurrentUser();
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
-
-  useEffect(() => {
-    const token = localStorage.getItem('supplysmart_token');
-    if (!token) {
-      setCurrentScreen('auth');
-    }
-  }, []);
 
   const navigateTo = (screenName: string) => {
     setCurrentScreen(screenName);
   };
 
-  const userName = localStorage.getItem('supplysmart_name') || 'Workspace User';
-  const userRole = localStorage.getItem('supplysmart_role') || 'Staff';
+  const userName = user?.fullName ?? 'Workspace User';
+  const userRole = user?.role ?? 'Staff';
   
   // Check if current user has admin privileges
   const isAdmin = userRole === 'Admin'
@@ -60,10 +53,6 @@ export default function App() {
   const manageItems = isAdmin ? [
     { id: 'settings', label: 'Workspace Settings', icon: Settings2 },
   ] : [];
-
-  if (currentScreen === 'auth' || !localStorage.getItem('supplysmart_token')) {
-    return <AuthPage />;
-  }
 
   const initials = userName
     .split(' ')
@@ -143,8 +132,7 @@ export default function App() {
                 await new AuthService().logout();
                 await queryClient.cancelQueries();
                 queryClient.clear();
-                localStorage.clear();
-                navigate('/', { replace: true });
+                sessionChanged();
               } catch {
                 setSignOutError('Sign-out failed. Please try again.');
               } finally {

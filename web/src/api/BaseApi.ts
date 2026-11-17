@@ -5,6 +5,7 @@ import axios, {
     type AxiosResponse,
     type InternalAxiosRequestConfig,
 } from 'axios';
+import { apiBaseUrl, csrfHeader, sessionRequestToken } from './browserSession';
 
 export class BaseApi {
     protected api: AxiosInstance;
@@ -13,7 +14,7 @@ export class BaseApi {
 
     public constructor(usesAuth: boolean = true) {
         this.usesAuth = usesAuth;
-        this.baseUrl = import.meta.env.VITE_BASEURL || '';
+        this.baseUrl = apiBaseUrl;
         
         this.api = axios.create({
             headers: {
@@ -23,14 +24,11 @@ export class BaseApi {
             }
         });
 
-        // Request Interceptor: Automatically attach JWT token if required
         this.api.interceptors.request.use(
-            async (request: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> => {
-                if (this.usesAuth) {
-                    const token = localStorage.getItem('supplysmart_token');
-                    if (token && request.headers) {
-                        request.headers.Authorization = `Bearer ${token}`;
-                    }
+            (request: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+                const token = sessionRequestToken();
+                if (token && !['get', 'head', 'options'].includes(request.method ?? 'get') && !request.headers.has(csrfHeader)) {
+                    request.headers.set(csrfHeader, token);
                 }
                 return request;
             },
@@ -42,8 +40,8 @@ export class BaseApi {
             (response: AxiosResponse) => response,
             (error: AxiosError) => {
                 const errorMsg = this.getErrorMsg(error);
-                if (error.response?.status === 401) {
-                    localStorage.clear();
+                if (this.usesAuth && error.response?.status === 401) {
+                    sessionStorage.removeItem('supplysmart_location_id');
                     window.location.replace('/');
                 }
                 return Promise.reject(new Error(errorMsg));

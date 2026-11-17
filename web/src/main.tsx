@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import RequireAuth from './components/protected/RequireAuth';
+import { initializeBrowserSession, readBrowserSession } from './api/browserSession';
 import './index.css';
 
 import AuthPage from './pages/auth/AuthPage';
@@ -19,8 +20,13 @@ const queryClient = new QueryClient({
 });
 
 // Configure React Router
-const router = createBrowserRouter([
-  {
+initializeBrowserSession();
+const router = createBrowserRouter([{
+  id: 'browser-session',
+  loader: readBrowserSession,
+  hydrateFallbackElement: <main role="status">Checking your session…</main>,
+  errorElement: <main role="alert">Unable to check your session. <button onClick={() => window.location.reload()}>Try again</button></main>,
+  children: [{
     path: '/',
     element: <AuthPage />,
   },
@@ -34,8 +40,8 @@ const router = createBrowserRouter([
       },
       // Future protected routes go here!
     ],
-  },
-]);
+  }],
+}]);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

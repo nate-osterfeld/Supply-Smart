@@ -1,21 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthService } from '../api/AuthService';
-import type { LoginDto, RegisterDto, AuthResponseDto, LocationDto } from '../models';
+import { sessionChanged } from '../api/browserSession';
+import type { LoginDto, RegisterDto } from '../models';
 
 export function useAuth() {
     const service = new AuthService();
     const queryClient = useQueryClient();
 
-    const completeAuthentication = async (data: AuthResponseDto) => {
+    const completeAuthentication = async () => {
         // Queries use shared keys, so no previous account's data may survive a new session.
         await queryClient.cancelQueries();
         queryClient.clear();
-        localStorage.removeItem('supplysmart_location_id');
-        localStorage.setItem('supplysmart_token', data.token);
-        localStorage.setItem('supplysmart_org_id', data.organizationId.toString());
-        localStorage.setItem('supplysmart_role', data.role);
-        localStorage.setItem('supplysmart_email', data.email);
-        localStorage.setItem('supplysmart_name', data.fullName);
+        sessionChanged();
     };
 
     const loginMutation = useMutation({
@@ -28,17 +24,8 @@ export function useAuth() {
         onSuccess: completeAuthentication,
     });
 
-    const locationsQuery = useQuery({
-        queryKey: ['locations'],
-        queryFn: () => service.getLocations(),
-        retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token'),
-    });
-
     return {
         login: loginMutation,
         register: registerMutation,
-        locations: (locationsQuery.data ?? []) as LocationDto[],
-        isLoadingLocations: locationsQuery.isLoading,
     };
 }

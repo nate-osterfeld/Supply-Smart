@@ -16,6 +16,7 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import { useStorage } from '../../hooks/useStorage';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useSubscription } from '../../hooks/useSubscription';
 
 type ViewLevel = 'locations' | 'rooms' | 'containers';
@@ -23,7 +24,7 @@ type ModalType = 'none' | 'roomOrContainer' | 'editRoom' | 'editContainer' | 'it
 
 export default function StoragePage() {
   // Display controls for the signed-in role; the API enforces these permissions.
-  const role = localStorage.getItem('supplysmart_role');
+  const role = useCurrentUser()?.role;
   const canManageStorage = role === 'Admin' || role === 'Manager';
   const [viewLevel, setViewLevel] = useState<ViewLevel>('locations');
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);

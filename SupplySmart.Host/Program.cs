@@ -74,6 +74,7 @@ app.UseHttpsRedirection();
 // Enable Authentication & Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
+app.Use((context, next) => BrowserSession.ProtectWrites(context, next, app.Configuration));
 
 // Enable serving static files from wwwroot (React frontend)
 app.UseDefaultFiles();
