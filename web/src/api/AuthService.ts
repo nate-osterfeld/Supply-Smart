@@ -16,8 +16,11 @@ export class AuthService extends BaseApi implements IAuthService {
     private readonly endpoint: string = 'api/auth';
 
     public login = async (dto: LoginDto): Promise<AuthResponseDto> => {
-        // Login doesn't need prior auth token, so we override usesAuth or use a separate instance if preferred
-        const response = await this.post<AuthResponseDto>(`${this.endpoint}/login`, dto);
+        const response = await this.post<AuthResponseDto>(`${this.endpoint}/login`, dto, {
+            // A credential rejection belongs on the sign-in form, not in the expired-session interceptor.
+            validateStatus: status => status === 200 || status === 401,
+        });
+        if (response.status === 401) throw new Error('Email or password is incorrect.');
         return response.data;
     };
 

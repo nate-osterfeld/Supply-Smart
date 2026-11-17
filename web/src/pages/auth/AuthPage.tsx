@@ -52,6 +52,7 @@ export default function AuthPage() {
   
   const [step, setStep] = useState<'auth' | 'locations'>('auth');
   const [mode, setMode] = useState<'sign-in' | 'create'>('sign-in');
+  const formError = mode === 'sign-in' ? login.error : register.error;
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Form inputs
@@ -68,13 +69,11 @@ export default function AuthPage() {
     e.preventDefault();
     if (mode === 'sign-in') {
       login.mutate({ email, password }, {
-        onSuccess: (data: AuthResponseDto) => handleAuthSuccess(data),
-        onError: (err: Error) => alert(err.message)
+        onSuccess: handleAuthSuccess
       });
     } else {
       register.mutate({ organizationName: orgName, adminFullName, email, password }, {
-        onSuccess: (data: AuthResponseDto) => handleAuthSuccess(data),
-        onError: (err: Error) => alert(err.message)
+        onSuccess: handleAuthSuccess
       });
     }
   };
@@ -119,7 +118,7 @@ export default function AuthPage() {
                   <button 
                     key={item} 
                     type="button" 
-                    onClick={() => setMode(item)} 
+                    onClick={() => { login.reset(); register.reset(); setMode(item); }}
                     className={`rounded-lg px-3 py-2.5 text-xs font-semibold transition ${
                       mode === item ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-400' : 'text-slate-500'
                     }`}
@@ -190,7 +189,9 @@ export default function AuthPage() {
                   </button>
                 </div>
 
-                <button 
+                {formError && <p role="alert" className="text-sm text-red-700">{formError.message}</p>}
+
+                <button
                   className="mt-1 flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50" 
                   type="submit"
                   disabled={login.isPending || register.isPending}
