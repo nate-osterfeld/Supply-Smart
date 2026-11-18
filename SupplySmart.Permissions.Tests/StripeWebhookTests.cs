@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,6 +27,7 @@ public class StripeWebhookTests
     {
         using var billing = new StripeBillingFixture();
         await billing.LinkClinic();
+        billing.StripeResource("subscriptions/sub_current", StripeBillingFixture.Subscription("sub_current"));
         using var response = await billing.Deliver(eventType, new
         {
             id = subscription, @object = "subscription", customer,
@@ -43,6 +45,58 @@ public class StripeWebhookTests
             return 0;
         });
     }
+
+    [Fact]
+    public async Task DelayedUpdateUsesTheCurrentProviderPrice()
+    {
+        using var billing = new StripeBillingFixture();
+        await billing.LinkClinic();
+        billing.StripeResource("subscriptions/sub_current", StripeBillingFixture.Subscription("sub_current", price: "price_starter"));
+        using var response = await billing.Deliver("customer.subscription.updated",
+            StripeBillingFixture.Subscription("sub_current", price: "price_enterprise"));
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("Starter", await billing.App.ReadDb(db => db.Organizations.Where(o => o.Id == 1).Select(o => o.SubscriptionPlan).SingleAsync()));
+    }
+
+    [Fact]
+    public async Task AnUpdateAlreadyInFlightCannotUndoACommittedCancellation()
+    {
+        using var billing = new StripeBillingFixture();
+        await billing.LinkClinic();
+        var active = StripeBillingFixture.Subscription("sub_current");
+        var canceled = StripeBillingFixture.Subscription("sub_current", status: "canceled");
+        billing.StripeResource("subscriptions/sub_current", active);
+        var reading = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        billing.BeforeStripeReply = () =>
+        {
+            reading.TrySetResult();
+            return resume.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        };
+        var pending = billing.Deliver("customer.subscription.updated", active);
+        try
+        {
+            await reading.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            using var deletion = await billing.Deliver("customer.subscription.deleted", canceled);
+            deletion.EnsureSuccessStatusCode();
+        }
+        finally
+        {
+            resume.TrySetResult();
+        }
+        using var stale = await pending;
+        Assert.False(stale.IsSuccessStatusCode);
+        billing.StripeResource("subscriptions/sub_current", canceled);
+        using var retry = await billing.Deliver("customer.subscription.updated", active);
+        retry.EnsureSuccessStatusCode();
+        await billing.App.ReadDb(async db =>
+        {
+            var org = await db.Organizations.SingleAsync(o => o.Id == 1);
+            Assert.Equal(("Free", "Canceled", 50), (org.SubscriptionPlan, org.SubscriptionStatus, org.MaxItemsQuota));
+            Assert.Equal(1, await db.AuditLogs.CountAsync());
+            return 0;
+        });
+    }
 }
 
 internal sealed class StripeBillingFixture : IDisposable
@@ -50,9 +104,13 @@ internal sealed class StripeBillingFixture : IDisposable
     private readonly string signingSecret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     public SettingsApp App { get; }
     private readonly HttpClient client;
+    private readonly LocalStripe transport = new();
+    private readonly HttpClient stripeHttp;
 
     public StripeBillingFixture()
     {
+        stripeHttp = new HttpClient(transport);
+        var stripe = new StripeClient("sk_test_fixture", httpClient: new SystemNetHttpClient(stripeHttp, maxNetworkRetries: 0, enableTelemetry: false));
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["StripeSettings:WebhookSecret"] = signingSecret,
@@ -61,21 +119,50 @@ internal sealed class StripeBillingFixture : IDisposable
             ["StripeSettings:EnterprisePriceId"] = "price_enterprise"
         }).Build();
         App = new SettingsApp(services => services.AddScoped<ISubscriptionService>(sp =>
-            new BillingService(sp.GetRequiredService<SupplySmartDbContext>(), config)));
+            new BillingService(sp.GetRequiredService<SupplySmartDbContext>(), config, stripe)));
         client = App.NewClient();
     }
 
-    public Task<int> LinkClinic() => App.ReadDb(async db =>
+    public Task<int> LinkClinic(string? subscriptionId = "sub_current") => App.ReadDb(async db =>
     {
         var org = await db.Organizations.SingleAsync(o => o.Id == 1);
         org.StripeCustomerId = "cus_first";
-        org.StripeSubscriptionId = "sub_current";
-        org.SubscriptionPlan = "Professional";
-        org.MaxRoomsQuota = 15;
-        org.MaxItemsQuota = 1500;
+        org.StripeSubscriptionId = subscriptionId;
+        if (subscriptionId is not null)
+        {
+            org.SubscriptionPlan = "Professional";
+            org.MaxRoomsQuota = 15;
+            org.MaxItemsQuota = 1500;
+        }
         (await db.Organizations.SingleAsync(o => o.Id == 2)).StripeCustomerId = "cus_second";
         return await db.SaveChangesAsync();
     });
+
+    public void StripeResource(string path, object resource) => transport.Resources["/v1/" + path] = resource;
+    public Func<Task>? BeforeStripeReply { set => transport.BeforeReply = value; }
+
+    public static object Subscription(string id, string status = "active", string price = "price_starter",
+        string customer = "cus_first", long created = 1000) => new
+    {
+        id, @object = "subscription", customer, status, created,
+        items = new { @object = "list", data = new[] { new { quantity = 1, price = new { id = price, @object = "price" } } } }
+    };
+
+    private sealed class LocalStripe : HttpMessageHandler
+    {
+        public Dictionary<string, object> Resources { get; } = [];
+        public Func<Task>? BeforeReply { get; set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            var uri = request.RequestUri!;
+            if (uri.AbsolutePath.StartsWith("/v1/checkout/sessions/"))
+                Assert.Contains("subscription", Uri.UnescapeDataString(uri.Query));
+            Assert.True(Resources.TryGetValue(uri.AbsolutePath, out var result), $"Unexpected Stripe read: {uri.AbsolutePath}");
+            if (BeforeReply is not null) await BeforeReply();
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(result) };
+        }
+    }
 
     public async Task<HttpResponseMessage> Deliver(string eventType, object resource)
     {
@@ -98,5 +185,6 @@ internal sealed class StripeBillingFixture : IDisposable
     {
         client.Dispose();
         App.Dispose();
+        stripeHttp.Dispose();
     }
 }
