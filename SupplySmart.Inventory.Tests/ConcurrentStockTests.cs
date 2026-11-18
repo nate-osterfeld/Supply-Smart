@@ -79,6 +79,32 @@ public class ConcurrentStockTests
     }
 
     [Fact]
+    public async Task AnOlderStockFormCannotUndoACompletedRestock()
+    {
+        using var app = new SettingsApp();
+        using var staff = await app.SignIn(3);
+        await InventoryTestData.Seed(app, 20);
+        var bin = await staff.GetFromJsonAsync<List<InventoryItemDto>>("/api/locations/items?containerId=1");
+        var displayed = Assert.Single(bin!);
+        var edit = new UpdateItemDto
+        {
+            Name = displayed.Name, Sku = displayed.Sku, Quantity = 14, ExpectedQuantity = displayed.Quantity
+        };
+        using var restock = await staff.PutAsJsonAsync("/api/locations/items/1", edit);
+        restock.EnsureSuccessStatusCode();
+
+        edit.Name = "Old form edit";
+        edit.Quantity = displayed.Quantity;
+        using var stale = await staff.PutAsJsonAsync("/api/locations/items/1", edit);
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        Assert.Equal(new[] { 14, 20 }, await InventoryTestData.Quantities(app));
+        Assert.Equal(displayed.Name, await app.ReadDb(db => db.InventoryItems.Where(i => i.Id == 1).Select(i => i.Name).SingleAsync()));
+        Assert.Equal(1, await app.ReadDb(db => db.AuditLogs.CountAsync()));
+        Assert.Equal(4, await app.ReadDb(db => db.InventoryTransactions.Select(t => t.QuantityChange).SingleAsync()));
+        Assert.Empty(app.Email.Recipients);
+    }
+
+    [Fact]
     public async Task UnchangedRequestWithoutCompetingWriteStillSucceeds()
     {
         using var app = new SettingsApp();

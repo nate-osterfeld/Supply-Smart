@@ -565,6 +565,10 @@ namespace SupplySmart.Domain.Services
 
             // Save quantity before change for forecasting and alerts
             var quantityBefore = item.Quantity;
+            if (dto.ExpectedQuantity.HasValue && dto.ExpectedQuantity.Value != quantityBefore)
+            {
+                throw new DbUpdateConcurrencyException("The quantity has changed since the item was opened.");
+            }
             var quantityAfter = dto.Quantity;
             var quantityChange = quantityAfter - quantityBefore;
 

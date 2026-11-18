@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useStorage } from '../../hooks/useStorage'
+import type { MasterCatalogItemDto } from '../../models'
 
 type IconName = 'grid' | 'boxes' | 'file' | 'package' | 'clipboard' | 'settings' | 'chevron' | 'menu' | 'plus' | 'search' | 'sliders' | 'shield' | 'arrow' | 'more' | 'clock' | 'archive' | 'pencil'
 
@@ -63,7 +64,7 @@ export default function CatalogPage() {
 
   // Edit Item Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingItemId, setEditingItemId] = useState<number | null>(null)
+  const [editingItem, setEditingItem] = useState<MasterCatalogItemDto | null>(null)
   const [itemName, setItemName] = useState('')
   const [itemSku, setItemSku] = useState('')
   const [itemLot, setItemLot] = useState('')
@@ -105,8 +106,8 @@ export default function CatalogPage() {
     )
   }
 
-  const handleOpenEditModal = (item: any) => {
-    setEditingItemId(item.id)
+  const handleOpenEditModal = (item: MasterCatalogItemDto) => {
+    setEditingItem(item)
     setItemName(item.name || '')
     setItemSku(item.sku || '')
     setItemCategory(item.category || 'General')
@@ -129,7 +130,7 @@ export default function CatalogPage() {
   }
 
   const handleSaveEditedItem = async () => {
-    if (editingItemId === null || !itemName.trim()) return
+    if (editingItem === null || !itemName.trim()) return
     try {
       const payload = {
         name: itemName,
@@ -137,6 +138,7 @@ export default function CatalogPage() {
         category: itemCategory || 'General',
         lotNumber: itemLot || 'LOT-DEFAULT',
         quantity: Number(itemQty),
+        expectedQuantity: editingItem.quantity,
         globalThreshold: 50,
         minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
         unitCost: itemCost === '' ? 0 : Number(itemCost),
@@ -144,14 +146,12 @@ export default function CatalogPage() {
         expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
       }
 
-      if (updateItem) {
-        await updateItem({ itemId: editingItemId, dto: payload })
-      }
+      await updateItem({ itemId: editingItem.id, dto: payload })
       setIsEditModalOpen(false)
       notify(`Successfully updated ${itemName}`)
     } catch (error) {
       console.error('Failed to update item:', error)
-      notify('Failed to update item')
+      notify(error instanceof Error ? error.message : 'Failed to update item')
     }
   }
 
