@@ -56,6 +56,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
                 .Produces(StatusCodes.Status403Forbidden)
                 .WithName("CreateRoom")
+                .ProducesProblem(StatusCodes.Status404NotFound)
                 .WithDescription("Creates a new room within a specified physical location.")
                 .Produces<RoomDto>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status401Unauthorized)
@@ -81,6 +82,7 @@ namespace SupplySmart.Endpoints.Configuration
                 .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
                 .Produces(StatusCodes.Status403Forbidden)
                 .WithName("CreateContainer")
+                .ProducesProblem(StatusCodes.Status404NotFound)
                 .WithDescription("Creates a new storage bin or shelf inside a specified room.")
                 .Produces<ContainerDto>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status401Unauthorized)
@@ -104,6 +106,7 @@ namespace SupplySmart.Endpoints.Configuration
 
             locationEndpoints.MapPost("/containers/{containerId}/items", LocationEndpoints.AddItem)
                 .WithName("AddItemToContainer")
+                .ProducesProblem(StatusCodes.Status404NotFound)
                 .WithDescription("Adds a new inventory item to a specific container and logs an audit trail event.")
                 .Produces<InventoryItemDto>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status401Unauthorized)

@@ -12,13 +12,13 @@ namespace SupplySmart.Domain.Services
         Task<bool> UpdateLocationAsync(int organizationId, int locationId, string name, bool isPrimary, string userEmail);
         Task<bool> DeleteLocationAsync(int organizationId, int locationId, string userEmail);
         Task<IEnumerable<InventoryItemDto>> GetContainerItemsAsync(int organizationId, int? containerId);
-        Task<RoomDto> CreateRoomAsync(int organizationId, int locationId, string roomName);
+        Task<RoomDto?> CreateRoomAsync(int organizationId, int locationId, string roomName);
         Task<bool> UpdateRoomAsync(int organizationId, int roomId, string roomName, string userEmail);
         Task<bool> DeleteRoomAsync(int organizationId, int roomId);
-        Task<ContainerDto> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId);
+        Task<ContainerDto?> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId);
         Task<bool> UpdateContainerAsync(int organizationId, int containerId, string containerName, string kind, string userEmail);
         Task<bool> DeleteContainerAsync(int organizationId, int containerId);
-        Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail);
+        Task<InventoryItemDto?> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail);
         Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail);
         Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail);
         Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail);
@@ -232,12 +232,12 @@ namespace SupplySmart.Domain.Services
             };
         }
 
-        public async Task<RoomDto> CreateRoomAsync(int organizationId, int locationId, string roomName)
+        public async Task<RoomDto?> CreateRoomAsync(int organizationId, int locationId, string roomName)
         {
             var location = await _context.Locations
                 .FirstOrDefaultAsync(l => l.Id == locationId && l.OrganizationId == organizationId);
 
-            if (location == null) throw new UnauthorizedAccessException("Invalid location scope.");
+            if (location == null) return null;
 
             var org = await _context.Organizations
                 .AsNoTracking()
@@ -310,19 +310,19 @@ namespace SupplySmart.Domain.Services
             return true;
         }
 
-        public async Task<ContainerDto> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId)
+        public async Task<ContainerDto?> CreateContainerAsync(int organizationId, int roomId, string containerName, string kind, int? parentContainerId)
         {
             var room = await _context.Rooms
                 .Include(r => r.Location)
                 .FirstOrDefaultAsync(r => r.Id == roomId && r.Location.OrganizationId == organizationId);
 
-            if (room == null) throw new UnauthorizedAccessException("Invalid room scope.");
+            if (room == null) return null;
 
             if (parentContainerId.HasValue)
             {
                 var parentContainer = await _context.Containers
                     .FirstOrDefaultAsync(c => c.Id == parentContainerId.Value && c.RoomId == roomId && c.OrganizationId == organizationId);
-                if (parentContainer == null) throw new ArgumentException("Invalid parent container scope.");
+                if (parentContainer == null) return null;
             }
 
             var container = new Container
@@ -389,14 +389,14 @@ namespace SupplySmart.Domain.Services
             return true;
         }
 
-        public async Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail)
+        public async Task<InventoryItemDto?> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail)
         {
             var container = await _context.Containers
                 .Include(c => c.Room)
                 .ThenInclude(r => r.Location)
                 .FirstOrDefaultAsync(c => c.Id == containerId && c.Room.Location.OrganizationId == organizationId);
 
-            if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
+            if (container == null) return null;
 
             var org = await _context.Organizations
                 .AsNoTracking()

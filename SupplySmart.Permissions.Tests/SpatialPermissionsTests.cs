@@ -32,10 +32,37 @@ public class SpatialPermissionsTests
         using var app=new SettingsApp();var client=await app.SignIn(userId);
         await Seed(app);var before=await Snapshot(app);
         var response=await Send(client,operation,2);
-        // Current create handlers turn a missing/foreign parent into 500; update/delete use 404.
-        // Either path must leave both clinics unchanged. Normalizing errors is separate work.
-        Assert.Equal(operation.StartsWith("create") ? HttpStatusCode.InternalServerError : HttpStatusCode.NotFound,response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,response.StatusCode);
         Assert.Equal(before,await Snapshot(app));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(9999)]
+    public async Task MissingAndForeignStorageParentsHaveTheSameResponse(int parentId)
+    {
+        using var app = new SettingsApp();
+        using var manager = await app.SignIn(4);
+        using var staff = await app.SignIn(3);
+        await Seed(app);
+        var before = await Snapshot(app);
+
+        using var room = await Send(manager, "create-room", parentId);
+        using var container = await Send(manager, "create-container", parentId);
+        using var nested = await manager.PostAsJsonAsync("/api/locations/rooms/1/containers",
+            new { name = "Nested bin", kind = "Bin", parentContainerId = parentId });
+        using var item = await staff.PostAsJsonAsync($"/api/locations/containers/{parentId}/items",
+            new { name = "New supply", sku = "TEST", quantity = 1 });
+
+        foreach (var response in new[] { room, container, nested, item })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            var problem = await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>();
+            Assert.Equal("Storage parent not found.", problem!.Title);
+        }
+        Assert.Equal(before, await Snapshot(app));
+        Assert.Equal(0, await app.ReadDb(db => db.InventoryItems.CountAsync()));
+        Assert.Equal(0, await app.ReadDb(db => db.AuditLogs.CountAsync()));
     }
 
     [Fact]
