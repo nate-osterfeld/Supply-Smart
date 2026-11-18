@@ -82,6 +82,25 @@ public class StockTransferTests(ITestOutputHelper output)
         Assert.Equal(new[] { 10, 20 }, await InventoryTestData.Quantities(app));
         Assert.Equal(0, await app.ReadDb(db => db.AuditLogs.CountAsync()));
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(3)]
+    public async Task ATransferNeedsADifferentBinBeforeWritingAnAuditEntryOrChangingStock(int? quantity)
+    {
+        using var app = new SettingsApp();
+        using var staff = await app.SignIn(3);
+        await InventoryTestData.Seed(app, 20);
+        using var response = await staff.PostAsJsonAsync("/api/locations/items/1/move",
+            new { targetContainerId = 1, quantity, minimumThreshold = 8 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(new[] { 10, 20 }, await InventoryTestData.Quantities(app));
+        Assert.Equal(0, await app.ReadDb(db => db.InventoryItems.Where(i => i.Id == 1)
+            .Select(i => i.MinimumThreshold).SingleAsync()));
+        Assert.Equal(0, await app.ReadDb(db => db.AuditLogs.CountAsync()));
+        Assert.Empty(app.Email.Recipients);
+    }
 }
 
 internal static class InventoryTestData

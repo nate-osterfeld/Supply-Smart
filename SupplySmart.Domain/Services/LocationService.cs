@@ -468,6 +468,11 @@ namespace SupplySmart.Domain.Services
 
             if (item == null || targetContainer == null) return false;
 
+            if (item.ContainerId == targetContainer.Id)
+            {
+                throw new ArgumentException("Select a different destination bin.");
+            }
+
             if (minimumThreshold < 0)
             {
                 throw new ArgumentException("Minimum threshold cannot be negative.");
