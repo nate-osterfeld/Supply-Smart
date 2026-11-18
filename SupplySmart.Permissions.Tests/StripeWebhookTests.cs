@@ -85,7 +85,8 @@ public class StripeWebhookTests
             resume.TrySetResult();
         }
         using var stale = await pending;
-        Assert.False(stale.IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, stale.StatusCode);
+        Assert.DoesNotContain("billing state", await stale.Content.ReadAsStringAsync());
         billing.StripeResource("subscriptions/sub_current", canceled);
         using var retry = await billing.Deliver("customer.subscription.updated", active);
         retry.EnsureSuccessStatusCode();
@@ -97,6 +98,54 @@ public class StripeWebhookTests
             return 0;
         });
     }
+
+    [Fact]
+    public async Task AReceiverWithoutASigningSecretLeavesDeliveryPending()
+    {
+        using var billing = new StripeBillingFixture(signingConfigured: false);
+        await billing.LinkClinic();
+        using var response = await billing.Deliver("customer.subscription.deleted",
+            StripeBillingFixture.Subscription("sub_current", status: "canceled"));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await billing.App.ReadDb(db => db.AuditLogs.CountAsync()));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("t=1,v1=unrecognized")]
+    public async Task UnverifiedNotificationsReceiveAGenericClientError(string? signature)
+    {
+        using var billing = new StripeBillingFixture();
+        using var client = billing.App.NewClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/stripe/webhook")
+        {
+            Content = JsonContent.Create(new { id = "evt_fixture", @object = "event" })
+        };
+        if (signature is not null) request.Headers.Add("Stripe-Signature", signature);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("Invalid Stripe notification.", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal(0, await billing.App.ReadDb(db => db.AuditLogs.CountAsync()));
+    }
+
+    [Fact]
+    public async Task AProviderOutageCanBeRetriedWithoutExposingItsDiagnostics()
+    {
+        using var billing = new StripeBillingFixture();
+        await billing.LinkClinic();
+        var subscription = StripeBillingFixture.Subscription("sub_current");
+        billing.StripeResource("subscriptions/sub_current", subscription);
+        billing.BeforeStripeReply = () => throw new HttpRequestException("Local provider diagnostic.");
+        using var outage = await billing.Deliver("customer.subscription.updated", subscription);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, outage.StatusCode);
+        Assert.Empty(await outage.Content.ReadAsStringAsync());
+        Assert.Equal(0, await billing.App.ReadDb(db => db.AuditLogs.CountAsync()));
+        billing.BeforeStripeReply = null;
+        using var retry = await billing.Deliver("customer.subscription.updated", subscription);
+        retry.EnsureSuccessStatusCode();
+        Assert.Equal(1, await billing.App.ReadDb(db => db.AuditLogs.CountAsync()));
+    }
 }
 
 internal sealed class StripeBillingFixture : IDisposable
@@ -107,13 +156,13 @@ internal sealed class StripeBillingFixture : IDisposable
     private readonly LocalStripe transport = new();
     private readonly HttpClient stripeHttp;
 
-    public StripeBillingFixture()
+    public StripeBillingFixture(bool signingConfigured = true)
     {
         stripeHttp = new HttpClient(transport);
         var stripe = new StripeClient("sk_test_fixture", httpClient: new SystemNetHttpClient(stripeHttp, maxNetworkRetries: 0, enableTelemetry: false));
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["StripeSettings:WebhookSecret"] = signingSecret,
+            ["StripeSettings:WebhookSecret"] = signingConfigured ? signingSecret : "",
             ["StripeSettings:StarterPriceId"] = "price_starter",
             ["StripeSettings:ProfessionalPriceId"] = "price_pro",
             ["StripeSettings:EnterprisePriceId"] = "price_enterprise"

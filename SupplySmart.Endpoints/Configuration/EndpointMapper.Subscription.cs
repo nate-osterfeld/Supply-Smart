@@ -55,6 +55,7 @@ public static partial class EndpointMapper
             .WithDescription("Receives asynchronous webhook events from Stripe.")
             .AllowAnonymous()
             .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest);
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status503ServiceUnavailable);
     }
 }

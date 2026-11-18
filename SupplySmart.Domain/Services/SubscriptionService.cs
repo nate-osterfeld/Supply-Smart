@@ -10,6 +10,8 @@ using SupplySmart.Integrations.Models.DTO;
 
 namespace SupplySmart.Domain.Services
 {
+    public sealed class InvalidStripeWebhookException(Exception cause) : Exception("Invalid Stripe notification.", cause) { }
+
     public interface ISubscriptionService
     {
         Task<SubscriptionDetailsDto> GetSubscriptionDetailsAsync(int organizationId);
@@ -206,8 +208,17 @@ namespace SupplySmart.Domain.Services
 
         public async Task HandleStripeWebhookAsync(string jsonPayload, string stripeSignatureHeader)
         {
-            if (string.IsNullOrWhiteSpace(_webhookSecret)) return;
-            var stripeEvent = EventUtility.ConstructEvent(jsonPayload, stripeSignatureHeader, _webhookSecret);
+            if (string.IsNullOrWhiteSpace(_webhookSecret))
+                throw new InvalidOperationException("Stripe webhook signing is not configured.");
+            Event stripeEvent;
+            try
+            {
+                stripeEvent = EventUtility.ConstructEvent(jsonPayload, stripeSignatureHeader, _webhookSecret);
+            }
+            catch (Exception ex) when (ex is StripeException or Newtonsoft.Json.JsonException or ArgumentException or FormatException or OverflowException)
+            {
+                throw new InvalidStripeWebhookException(ex);
+            }
 
             if (stripeEvent.Type is "checkout.session.completed" or "checkout.session.async_payment_succeeded")
             {
