@@ -507,7 +507,11 @@ namespace SupplySmart.Domain.Services
                         && i.ContainerId == targetContainerId
                         && i.Sku == item.Sku
                         && i.LotNumber == item.LotNumber
-                        && i.ExpirationDate == item.ExpirationDate);
+                        && i.ExpirationDate == item.ExpirationDate
+                        && i.Name == item.Name
+                        && i.Category == item.Category
+                        && i.Type == item.Type
+                        && i.UnitCost == item.UnitCost);
 
                 if (existingTargetItem != null && (long)existingTargetItem.Quantity + moveQty > int.MaxValue)
                 {
@@ -533,6 +537,8 @@ namespace SupplySmart.Domain.Services
                         ContainerId = targetContainerId,
                         Name = item.Name,
                         Sku = item.Sku,
+                        Category = item.Category,
+                        Type = item.Type,
                         LotNumber = item.LotNumber,
                         ExpirationDate = item.ExpirationDate,
                         Quantity = moveQty,

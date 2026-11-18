@@ -27,6 +27,50 @@ public class StockTransferTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task SplitKeepsTheOriginalClassificationAndValue()
+    {
+        using var app = new SettingsApp();
+        using var staff = await app.SignIn(3);
+        await InventoryTestData.Seed(app, 20, "DIFFERENT");
+        await app.ReadDb(db => db.InventoryItems.Where(i => i.Id == 1).ExecuteUpdateAsync(set => set
+            .SetProperty(i => i.Type, ItemType.Reusable)
+            .SetProperty(i => i.Category, "Instruments")
+            .SetProperty(i => i.UnitCost, 17.50m)));
+
+        using var response = await staff.PostAsJsonAsync("/api/locations/items/1/move",
+            new { targetContainerId = 2, quantity = 3 });
+        response.EnsureSuccessStatusCode();
+        var split = await app.ReadDb(db => db.InventoryItems.SingleAsync(i => i.ContainerId == 2 && i.Sku == "SAME"));
+        Assert.Equal(ItemType.Reusable, split.Type);
+        Assert.Equal("Instruments", split.Category);
+        Assert.Equal(17.50m, split.UnitCost);
+        Assert.Equal(3, split.Quantity);
+    }
+
+    [Theory]
+    [InlineData("Other supply", "", ItemType.Consumable, 0)]
+    [InlineData("Sample", "Instruments", ItemType.Consumable, 0)]
+    [InlineData("Sample", "", ItemType.Reusable, 0)]
+    [InlineData("Sample", "", ItemType.Consumable, 5)]
+    public async Task DistinctStockLinesSharingSkuAndLotStaySeparate(
+        string name, string category, ItemType type, int unitCost)
+    {
+        using var app = new SettingsApp();
+        using var staff = await app.SignIn(3);
+        await InventoryTestData.Seed(app, 20);
+        await app.ReadDb(db => db.InventoryItems.Where(i => i.Id == 2).ExecuteUpdateAsync(set => set
+            .SetProperty(i => i.Name, name)
+            .SetProperty(i => i.Category, category)
+            .SetProperty(i => i.Type, type)
+            .SetProperty(i => i.UnitCost, (decimal)unitCost)));
+
+        using var response = await staff.PostAsJsonAsync("/api/locations/items/1/move",
+            new { targetContainerId = 2, quantity = 3 });
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(new[] { 7, 20, 3 }, await InventoryTestData.Quantities(app));
+    }
+
+    [Fact]
     public async Task TransferCannotTargetAnotherOrganization()
     {
         using var app = new SettingsApp();
