@@ -255,6 +255,10 @@ namespace SupplySmart.Endpoints.Endpoints
                 var item = await locationService.AddItemAsync(orgId, containerId, dto, userEmail);
                 return TypedResults.Ok(item);
             }
+            catch (InventoryQuotaExceededException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 return TypedResults.BadRequest<object>(new { message = ex.Message });
@@ -286,7 +290,7 @@ namespace SupplySmart.Endpoints.Endpoints
             {
                 return TypedResults.Conflict<object>(new { message = "Stock changed during this request. Reload the inventory before trying again." });
             }
-            catch (InvalidOperationException ex)
+            catch (InventoryQuotaExceededException ex)
             {
                 return TypedResults.BadRequest<object>(new { message = ex.Message });
             }

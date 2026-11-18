@@ -399,7 +399,9 @@ namespace SupplySmart.Domain.Services
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
             ValidateItemValues(dto.Quantity, dto.MinimumThreshold, dto.UnitCost, dto.Type);
-            await EnsureItemQuotaAvailableAsync(organizationId);
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var organization = await GetOrganizationForItemAllocationAsync(organizationId);
+            await EnsureItemQuotaAvailableAsync(organization);
 
             var item = new InventoryItem
             {
@@ -430,6 +432,8 @@ namespace SupplySmart.Domain.Services
 
             await _context.SaveChangesAsync();
 
+            await transaction.CommitAsync();
+
             // Check if newly added item starts out below threshold or out of stock
             await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, dto.Quantity + 1, item);
 
@@ -451,6 +455,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail)
         {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
             var item = await _context.InventoryItems
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
@@ -496,6 +501,7 @@ namespace SupplySmart.Domain.Services
             }
             else
             {
+                var organization = await GetOrganizationForItemAllocationAsync(organizationId);
                 var existingTargetItem = await _context.InventoryItems
                     .FirstOrDefaultAsync(i => i.OrganizationId == organizationId
                         && i.ContainerId == targetContainerId
@@ -510,7 +516,7 @@ namespace SupplySmart.Domain.Services
 
                 if (existingTargetItem is null)
                 {
-                    await EnsureItemQuotaAvailableAsync(organizationId);
+                    await EnsureItemQuotaAvailableAsync(organization);
                 }
 
                 item.Quantity -= moveQty;
@@ -548,6 +554,7 @@ namespace SupplySmart.Domain.Services
             }
 
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             // Trigger stock alert if partial transfer leaves the source bin running low
             if (moveQty < oldQty)
@@ -686,20 +693,28 @@ namespace SupplySmart.Domain.Services
                 throw new ArgumentException("Item type must be Consumable (0) or Reusable (1).");
         }
 
-        private async Task EnsureItemQuotaAvailableAsync(int organizationId)
+        private Task<Organization> GetOrganizationForItemAllocationAsync(int organizationId)
         {
-            var org = await _context.Organizations.AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == organizationId);
-            if (org == null) throw new InvalidOperationException("Organization not found.");
+            // Hold one update lock per clinic until the stock row and its audit entry commit.
+            // SQLite already takes a writer lock when this transaction starts.
+            var organizations = _context.Database.IsSqlServer()
+                ? _context.Organizations.FromSql($"SELECT * FROM [Organizations] WITH (UPDLOCK) WHERE [Id] = {organizationId}")
+                : _context.Organizations.Where(o => o.Id == organizationId);
+            return organizations.AsNoTracking().SingleAsync();
+        }
 
+        private async Task EnsureItemQuotaAvailableAsync(Organization org)
+        {
             var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
             var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
-            var currentItemsCount = await _context.InventoryItems.CountAsync(i => i.OrganizationId == organizationId);
+            var currentItemsCount = await _context.InventoryItems.CountAsync(i => i.OrganizationId == org.Id);
             if (currentItemsCount >= maxItemsQuota)
             {
-                throw new InvalidOperationException(
+                throw new InventoryQuotaExceededException(
                     $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
             }
         }
     }
+
+    public sealed class InventoryQuotaExceededException(string message) : InvalidOperationException(message) { }
 }
