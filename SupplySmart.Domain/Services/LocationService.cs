@@ -154,36 +154,9 @@ namespace SupplySmart.Domain.Services
 
             var items = await query.ToListAsync();
 
+            var now = DateTime.UtcNow;
             return items.Select(i =>
             {
-                var statuses = new List<string>();
-
-                if (i.Quantity == 0)
-                {
-                    statuses.Add("Out of Stock");
-                }
-                else if (i.Quantity <= i.MinimumThreshold)
-                {
-                    statuses.Add("Low Stock");
-                }
-
-                if (i.ExpirationDate.HasValue)
-                {
-                    if (i.ExpirationDate.Value <= DateTime.UtcNow)
-                    {
-                        statuses.Add("Expired");
-                    }
-                    else if (i.ExpirationDate.Value <= DateTime.UtcNow.AddDays(30))
-                    {
-                        statuses.Add("Expiring Soon");
-                    }
-                }
-
-                if (!statuses.Any())
-                {
-                    statuses.Add("Safe");
-                }
-
                 return new InventoryItemDto
                 {
                     Id = i.Id,
@@ -194,7 +167,7 @@ namespace SupplySmart.Domain.Services
                     Quantity = i.Quantity,
                     MinimumThreshold = i.MinimumThreshold,
                     UnitCost = i.UnitCost,
-                    Statuses = statuses,
+                    Statuses = StockStatus.ForItem(i, now),
                     Category = !string.IsNullOrEmpty(i.Category) ? i.Category : "General",
                     Type = (int)i.Type
                 };
@@ -447,7 +420,7 @@ namespace SupplySmart.Domain.Services
                 Quantity = item.Quantity,
                 MinimumThreshold = item.MinimumThreshold,
                 UnitCost = item.UnitCost,
-                Statuses = new List<string> { "Safe" },
+                Statuses = StockStatus.ForItem(item, DateTime.UtcNow),
                 Category = item.Category,
                 Type = (int)item.Type
             };

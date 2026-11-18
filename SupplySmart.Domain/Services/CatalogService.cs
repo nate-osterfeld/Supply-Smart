@@ -27,20 +27,12 @@ namespace SupplySmart.Domain.Services
                 .Where(i => i.OrganizationId == organizationId)
                 .ToListAsync();
 
+            var now = DateTime.UtcNow;
             return items.Select(i =>
             {
-                var statuses = new List<string>();
-                if (i.Quantity == 0) statuses.Add("Out of Stock");
-                else if (i.Quantity <= i.MinimumThreshold) statuses.Add("Low Stock");
-
-                if (i.ExpirationDate.HasValue)
-                {
-                    if (i.ExpirationDate.Value <= DateTime.UtcNow) statuses.Add("Expired");
-                    else if (i.ExpirationDate.Value <= DateTime.UtcNow.AddDays(30)) statuses.Add("Expiring Soon");
-                }
-                if (!statuses.Any()) statuses.Add("In Stock");
-
-                string primaryStatus = statuses.Contains("Expired") ? "Expired" :
+                var statuses = StockStatus.ForItem(i, now);
+                string primaryStatus = statuses.Contains("Out of Stock") ? "Out of Stock" :
+                                       statuses.Contains("Expired") ? "Expired" :
                                        statuses.Contains("Expiring Soon") ? "Expiring Soon" :
                                        statuses.Contains("Low Stock") ? "Low Stock" : "In Stock";
 

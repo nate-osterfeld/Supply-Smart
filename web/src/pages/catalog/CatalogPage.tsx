@@ -36,6 +36,7 @@ function Status({ value }: { value: string }) {
         return 'bg-amber-50 text-amber-700 ring-amber-600/25';
       case 'Expiring Soon':
         return 'bg-orange-50 text-orange-700 ring-orange-500/30';
+      case 'Out of Stock':
       case 'Expired':
         return 'bg-red-50 text-red-700 font-semibold ring-red-600/40';
       default:
@@ -251,7 +252,7 @@ export default function CatalogPage() {
                         <button onClick={() => setSelectedStatuses([])} className="text-[11px] text-blue-600 hover:underline">Clear</button>
                       )}
                     </div>
-                    {['In Stock', 'Low Stock', 'Expiring Soon', 'Expired'].map((statusOption) => {
+                    {['In Stock', 'Low Stock', 'Out of Stock', 'Expiring Soon', 'Expired'].map((statusOption) => {
                       const checked = selectedStatuses.includes(statusOption)
                       return (
                         <label key={statusOption} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
