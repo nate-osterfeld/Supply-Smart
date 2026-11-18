@@ -135,8 +135,8 @@ export default function StoragePage() {
     setItemExp(formattedDate);
 
     setItemQty(item.quantity ?? 10);
-    setItemMinThreshold(item.minimumThreshold > 0 ? item.minimumThreshold : 2);
-    setItemCost(item.unitCost > 0 ? item.unitCost : 5.00);
+    setItemMinThreshold(item.minimumThreshold ?? 2);
+    setItemCost(item.unitCost ?? 5.00);
     setItemType(item.type ?? 0);
     setItemErrorMessage(null);
     setActiveModal('item');
