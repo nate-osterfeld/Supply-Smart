@@ -9,14 +9,14 @@ import { apiBaseUrl, csrfHeader, sessionRequestToken } from './browserSession';
 
 export class BaseApi {
     protected api: AxiosInstance;
-    protected baseUrl: string = '';
     protected usesAuth: boolean;
 
     public constructor(usesAuth: boolean = true) {
         this.usesAuth = usesAuth;
-        this.baseUrl = apiBaseUrl;
         
         this.api = axios.create({
+            baseURL: apiBaseUrl,
+            allowAbsoluteUrls: false,
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-cache',
@@ -50,19 +50,19 @@ export class BaseApi {
     }
 
     protected get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.get<T>(`${this.baseUrl}/${url}`, config);
+        return this.api.get<T>(url, config);
     }
 
     protected post<T>(url: string, data?: object | string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.post<T>(`${this.baseUrl}/${url}`, data, config);
+        return this.api.post<T>(url, data, config);
     }
 
     protected put<T>(url: string, data?: object, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.put<T>(`${this.baseUrl}${url}`, data, config);
+        return this.api.put<T>(url, data, config);
     }
 
     protected delete<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.delete<T>(`${this.baseUrl}${url}`, config);
+        return this.api.delete<T>(url, config);
     }
 
     private getErrorMsg(err: unknown): string {

@@ -1,10 +1,11 @@
 import axios from 'axios';
 import type { AuthResponseDto } from '../models';
 
-export const apiBaseUrl: string = (import.meta.env.VITE_BASEURL || '').replace(/\/$/, '');
-if (new URL(apiBaseUrl || '/', location.href).origin !== location.origin) {
+const configuredApi = new URL(import.meta.env.VITE_BASEURL || '/', location.origin);
+if (configuredApi.origin !== location.origin) {
     throw new Error('SupplySmart requires its browser API on the same origin as the application.');
 }
+export const apiBaseUrl = configuredApi.origin + configuredApi.pathname.replace(/\/$/, '');
 
 export const csrfHeader = 'X-SupplySmart-CSRF';
 let csrfToken: string | null = null;
