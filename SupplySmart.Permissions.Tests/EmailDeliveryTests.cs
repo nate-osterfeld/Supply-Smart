@@ -7,7 +7,7 @@ using SupplySmart.Domain.Services;
 
 namespace SupplySmart.Tests;
 
-public class InvitationEmailEncodingTests
+public class EmailDeliveryTests
 {
     [Fact]
     public async Task InvitationNameCannotInjectALinkIntoTheSentEmail()
@@ -32,23 +32,21 @@ public class InvitationEmailEncodingTests
         Assert.Contains("href='https://supplysmart.example.test/login?team=one&amp;next=two'", body);
     }
 
-    // Capture SMTP on loopback only, so this exercises the actual message that is sent.
+    [Fact]
+    public async Task AlertDeliveryKeepsOtherRecipientsOutOfTheMessageHeaders()
+    {
+        string[] recipients = ["manager@example.test", "purchasing@example.test", "partner@example.test"];
+        var (message, envelope) = await CaptureMail(service => service.SendAlertEmailAsync(recipients, "Low stock", "Please restock."));
+        Assert.Equal(recipients.Order(), envelope.Order());
+
+        var headers = message.Split("\r\n\r\n", 2)[0];
+        foreach (var email in recipients)
+            Assert.DoesNotContain(email, headers, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<string> CaptureInvitation(string name, string email, string password)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var capture = ReceiveMessage(listener, timeout.Token);
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["EmailSettings:Host"] = "127.0.0.1",
-            ["EmailSettings:Port"] = port.ToString(),
-            ["EmailSettings:BaseUrl"] = "https://supplysmart.example.test/login?team=one&next=two"
-        }).Build();
-
-        await new EmailService(configuration).SendInviteEmailAsync(email, name, password).WaitAsync(timeout.Token);
-        var message = await capture;
+        var (message, _) = await CaptureMail(service => service.SendInviteEmailAsync(email, name, password));
         var separator = message.IndexOf("\r\n\r\n", StringComparison.Ordinal);
         Assert.True(separator >= 0, "Expected MIME headers and a body.");
         var headers = message[..separator];
@@ -63,7 +61,26 @@ public class InvitationEmailEncodingTests
         return body;
     }
 
-    private static async Task<string> ReceiveMessage(TcpListener listener, CancellationToken cancellationToken)
+    // Capture SMTP on loopback so tests can inspect the envelope and the delivered message.
+    private static async Task<(string Message, List<string> Recipients)> CaptureMail(Func<EmailService, Task> send)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var capture = ReceiveMessage(listener, timeout.Token);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["EmailSettings:Host"] = "127.0.0.1",
+            ["EmailSettings:Port"] = port.ToString(),
+            ["EmailSettings:BaseUrl"] = "https://supplysmart.example.test/login?team=one&next=two"
+        }).Build();
+
+        await send(new EmailService(configuration)).WaitAsync(timeout.Token);
+        return await capture;
+    }
+
+    private static async Task<(string Message, List<string> Recipients)> ReceiveMessage(TcpListener listener, CancellationToken cancellationToken)
     {
         using var socket = await listener.AcceptTcpClientAsync(cancellationToken);
         await using var stream = socket.GetStream();
@@ -71,6 +88,7 @@ public class InvitationEmailEncodingTests
         await using var writer = new StreamWriter(stream, Encoding.ASCII, leaveOpen: true) { NewLine = "\r\n", AutoFlush = true };
         await writer.WriteLineAsync("220 localhost test SMTP");
         var message = new StringBuilder();
+        var recipients = new List<string>();
         var inData = false;
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
@@ -80,10 +98,15 @@ public class InvitationEmailEncodingTests
                 continue;
             }
             if (inData) { inData = false; await writer.WriteLineAsync("250 accepted"); }
+            else if (line.StartsWith("RCPT TO:", StringComparison.OrdinalIgnoreCase))
+            {
+                recipients.Add(line.Split('<', '>')[1]);
+                await writer.WriteLineAsync("250 OK");
+            }
             else if (line == "DATA") { inData = true; await writer.WriteLineAsync("354 send message"); }
             else if (line == "QUIT") { await writer.WriteLineAsync("221 goodbye"); break; }
             else await writer.WriteLineAsync("250 OK");
         }
-        return message.ToString();
+        return (message.ToString(), recipients);
     }
 }

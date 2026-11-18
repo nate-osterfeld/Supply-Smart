@@ -100,7 +100,7 @@ public class EmailService : IEmailService
 
         var formattedHtmlContent = ConvertSimpleMarkdownToHtml(markdownBody);
 
-        var mailMessage = new MailMessage
+        using var mailMessage = new MailMessage
         {
             From = new MailAddress(senderEmail, senderName),
             Subject = subject,
@@ -120,7 +120,7 @@ public class EmailService : IEmailService
 
         foreach (var email in recipients)
         {
-            mailMessage.To.Add(email);
+            mailMessage.Bcc.Add(email);
         }
 
         await client.SendMailAsync(mailMessage);
