@@ -283,49 +283,51 @@ namespace SupplySmart.Domain.Services
             }
             else if (stripeEvent.Type == "customer.subscription.updated" || stripeEvent.Type == "customer.subscription.deleted")
             {
-                var subscription = stripeEvent.Data.Object as Stripe.Subscription;
-                if (subscription != null)
+                if (stripeEvent.Data.Object is not Stripe.Subscription subscription ||
+                    string.IsNullOrWhiteSpace(subscription.CustomerId) || string.IsNullOrWhiteSpace(subscription.Id))
+                    return;
+
+                // A customer may have several subscriptions. Keep this binding valid through the plan write.
+                await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                var org = await _context.Organizations.SingleOrDefaultAsync(o =>
+                    o.StripeCustomerId == subscription.CustomerId && o.StripeSubscriptionId == subscription.Id);
+                if (org is null) return;
+                // If subscription was deleted or explicitly canceled
+                if (stripeEvent.Type == "customer.subscription.deleted" || subscription.Status == "canceled")
                 {
-                    var org = await _context.Organizations.FirstOrDefaultAsync(o => o.StripeCustomerId == subscription.CustomerId);
-                    if (org != null)
-                    {
-                        // If subscription was deleted or explicitly canceled
-                        if (stripeEvent.Type == "customer.subscription.deleted" || subscription.Status == "canceled")
-                        {
-                            ApplyLocalPlanUpdate(org, "Free", 2, 50, "Stripe Webhook (Canceled)");
-                        }
-                        else if (subscription.Items?.Data != null && subscription.Items.Data.Count > 0)
-                        {
-                            var priceId = subscription.Items.Data[0].Price?.Id;
-                            string planName = "Free";
-                            int rooms = 2;
-                            int items = 50;
-
-                            if (priceId == _configuration["StripeSettings:StarterPriceId"])
-                            {
-                                planName = "Starter";
-                                rooms = 5;
-                                items = 250;
-                            }
-                            else if (priceId == _configuration["StripeSettings:ProfessionalPriceId"])
-                            {
-                                planName = "Professional";
-                                rooms = 15;
-                                items = 1500;
-                            }
-                            else if (priceId == _configuration["StripeSettings:EnterprisePriceId"])
-                            {
-                                planName = "Enterprise";
-                                rooms = 9999;
-                                items = 999999;
-                            }
-
-                            ApplyLocalPlanUpdate(org, planName, rooms, items, "Stripe Webhook (Updated)");
-                        }
-
-                        await _context.SaveChangesAsync();
-                    }
+                    ApplyLocalPlanUpdate(org, "Free", 2, 50, "Stripe Webhook (Canceled)");
                 }
+                else if (subscription.Items?.Data != null && subscription.Items.Data.Count > 0)
+                {
+                    var priceId = subscription.Items.Data[0].Price?.Id;
+                    string planName = "Free";
+                    int rooms = 2;
+                    int items = 50;
+
+                    if (priceId == _configuration["StripeSettings:StarterPriceId"])
+                    {
+                        planName = "Starter";
+                        rooms = 5;
+                        items = 250;
+                    }
+                    else if (priceId == _configuration["StripeSettings:ProfessionalPriceId"])
+                    {
+                        planName = "Professional";
+                        rooms = 15;
+                        items = 1500;
+                    }
+                    else if (priceId == _configuration["StripeSettings:EnterprisePriceId"])
+                    {
+                        planName = "Enterprise";
+                        rooms = 9999;
+                        items = 999999;
+                    }
+
+                    ApplyLocalPlanUpdate(org, planName, rooms, items, "Stripe Webhook (Updated)");
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
             }
         }
 
