@@ -25,6 +25,7 @@ bind_secret() {
 bind_secret db-connection 'ConnectionStrings__supplysmart-db' "$DATABASE_CONNECTION"
 bind_secret jwt-signing-key JwtSettings__Secret "$JWT_SIGNING_KEY"
 bind_secret stripe-key StripeSettings__SecretKey "${STRIPE_SECRET_KEY:-}"
+bind_secret stripe-webhook StripeSettings__WebhookSecret "${STRIPE_WEBHOOK_SECRET:-}"
 bind_secret stripe-starter StripeSettings__StarterPriceId "${STRIPE_STARTER_PRICE_ID:-}"
 bind_secret stripe-professional StripeSettings__ProfessionalPriceId "${STRIPE_PROFESSIONAL_PRICE_ID:-}"
 bind_secret stripe-enterprise StripeSettings__EnterprisePriceId "${STRIPE_ENTERPRISE_PRICE_ID:-}"
