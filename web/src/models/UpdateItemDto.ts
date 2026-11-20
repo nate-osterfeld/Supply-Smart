@@ -4,6 +4,7 @@ export interface UpdateItemDto {
   lotNumber: string;
   expirationDate?: string | null;
   quantity: number;
+  expectedQuantity?: number;
   minimumThreshold: number;
   unitCost: number;
   category: string;

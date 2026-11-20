@@ -21,26 +21,18 @@ namespace SupplySmart.Domain.Services
 
         public async Task<IEnumerable<MasterCatalogItemDto>> GetMasterCatalogAsync(int organizationId)
         {
-            var items = await _context.InventoryItems
+            var items = await _context.ItemsInClinicStorage(organizationId)
+                .AsNoTracking()
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .Where(i => i.OrganizationId == organizationId)
                 .ToListAsync();
 
+            var now = DateTime.UtcNow;
             return items.Select(i =>
             {
-                var statuses = new List<string>();
-                if (i.Quantity == 0) statuses.Add("Out of Stock");
-                else if (i.Quantity <= i.MinimumThreshold) statuses.Add("Low Stock");
-
-                if (i.ExpirationDate.HasValue)
-                {
-                    if (i.ExpirationDate.Value <= DateTime.UtcNow) statuses.Add("Expired");
-                    else if (i.ExpirationDate.Value <= DateTime.UtcNow.AddDays(30)) statuses.Add("Expiring Soon");
-                }
-                if (!statuses.Any()) statuses.Add("In Stock");
-
-                string primaryStatus = statuses.Contains("Expired") ? "Expired" :
+                var statuses = StockStatus.ForItem(i, now);
+                string primaryStatus = statuses.Contains("Out of Stock") ? "Out of Stock" :
+                                       statuses.Contains("Expired") ? "Expired" :
                                        statuses.Contains("Expiring Soon") ? "Expiring Soon" :
                                        statuses.Contains("Low Stock") ? "Low Stock" : "In Stock";
 
@@ -67,6 +59,7 @@ namespace SupplySmart.Domain.Services
             var logs = await _context.AuditLogs
                 .Where(a => a.OrganizationId == organizationId)
                 .OrderByDescending(a => a.Timestamp)
+                .ThenByDescending(a => a.Id)
                 .Take(50)
                 .ToListAsync();
 

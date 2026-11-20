@@ -51,10 +51,10 @@ namespace SupplySmart.Domain.Services
                 TotalInventoryValue = items.Sum(i => i.Quantity * i.UnitCost),
                 ExpiringSoonCount = items
                     .Where(i => i.ExpirationDate.HasValue && i.ExpirationDate.Value > now && i.ExpirationDate.Value <= now.AddDays(ExpiringSoonDaysThreshold))
-                    .Sum(i => i.Quantity),
+                    .Sum(i => (long)i.Quantity),
                 ActiveLowStockAlertsCount = items
                     .Where(i => i.Quantity <= i.MinimumThreshold)
-                    .Sum(i => i.Quantity),
+                    .Sum(i => (long)i.Quantity),
                 PendingRestocksCount = items.Count(i => i.IsRestockPending),
                 SafeStockPercentage = safePct,
                 ExpiringSoonPercentage = expiringPct,
@@ -84,6 +84,7 @@ namespace SupplySmart.Domain.Services
             return await _context.AuditLogs
                 .Where(a => a.OrganizationId == organizationId)
                 .OrderByDescending(a => a.Timestamp)
+                .ThenByDescending(a => a.Id)
                 .Take(limit)
                 .Select(a => new AuditLogEntryDto
                 {

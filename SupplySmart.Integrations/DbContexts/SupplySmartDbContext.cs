@@ -146,6 +146,8 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(250);
                 entity.Property(e => e.Sku).IsRequired().HasMaxLength(100);
+                // Reject a stock write if another request changed the quantity we read.
+                entity.Property(e => e.Quantity).IsConcurrencyToken();
                 entity.Property(e => e.UnitCost)
                       .HasColumnType("decimal(18,2)");
 
@@ -170,6 +172,9 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.ToTable("AuditLogs");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.Timestamp).HasConversion(
+                    time => time.Kind == DateTimeKind.Local ? time.ToUniversalTime() : time,
+                    stored => DateTime.SpecifyKind(stored, DateTimeKind.Utc));
                 entity.Property(e => e.UserEmail)
                       .IsRequired()
                       .HasMaxLength(256);

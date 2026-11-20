@@ -88,3 +88,5 @@ app.MapForecastEndpoints();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+// Expose the entry point to the isolated API integration tests.
+public partial class Program { }

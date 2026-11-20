@@ -6,7 +6,7 @@ public class ForecastResponseDto
 
     public int LookbackDays { get; set; }
 
-    public int TotalPredictedDemand { get; set; }
+    public long TotalPredictedDemand { get; set; }
 
     public int ItemsAtRisk { get; set; }
 

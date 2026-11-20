@@ -148,6 +148,7 @@ namespace SupplySmart.Integrations.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("Quantity")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<string>("Sku")
