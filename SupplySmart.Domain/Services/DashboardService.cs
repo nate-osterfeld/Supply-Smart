@@ -84,6 +84,7 @@ namespace SupplySmart.Domain.Services
             return await _context.AuditLogs
                 .Where(a => a.OrganizationId == organizationId)
                 .OrderByDescending(a => a.Timestamp)
+                .ThenByDescending(a => a.Id)
                 .Take(limit)
                 .Select(a => new AuditLogEntryDto
                 {
