@@ -7,6 +7,26 @@ namespace SupplySmart.Tests;
 public class AuditTimelineTests
 {
     [Theory]
+    [InlineData("/api/catalog/audit-logs")]
+    [InlineData("/api/audit-ledger/recent")]
+    public async Task AuditTimestampsIdentifyTheUtcInstantAfterReadingFromStorage(string route)
+    {
+        using var app = new SettingsApp();
+        using var reader = await app.SignIn(1);
+        var instant = new DateTime(2026, 3, 8, 6, 59, 59, DateTimeKind.Utc).AddMilliseconds(123);
+        await app.ReadDb(async db =>
+        {
+            db.AuditLogs.Add(new AuditLog { OrganizationId = 1, Timestamp = instant });
+            return await db.SaveChangesAsync();
+        });
+
+        var entries = await reader.GetFromJsonAsync<AuditLogEntryDto[]>(route);
+        var timestamp = Assert.Single(entries!).Timestamp;
+        Assert.Equal(DateTimeKind.Utc, timestamp.Kind);
+        Assert.Equal(instant, timestamp);
+    }
+
+    [Theory]
     [InlineData("/api/catalog/audit-logs", 50)]
     [InlineData("/api/audit-ledger/recent", 5)]
     public async Task EachFeedReturnsTheNewestEntriesForTheSignedInClinic(string route, int limit)

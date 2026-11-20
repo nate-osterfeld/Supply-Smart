@@ -172,6 +172,9 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.ToTable("AuditLogs");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.Timestamp).HasConversion(
+                    time => time.Kind == DateTimeKind.Local ? time.ToUniversalTime() : time,
+                    stored => DateTime.SpecifyKind(stored, DateTimeKind.Utc));
                 entity.Property(e => e.UserEmail)
                       .IsRequired()
                       .HasMaxLength(256);
