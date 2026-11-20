@@ -51,7 +51,7 @@ function Status({ value }: { value: string }) {
   );
 }
 
-export default function CatalogPage() {
+export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean }) {
   const [tab, setTab] = useState<'catalog' | 'audit'>('catalog')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All categories')
@@ -75,7 +75,7 @@ export default function CatalogPage() {
 
   const [notice, setNotice] = useState('')
 
-  const { catalogItems = [], auditLogs = [], isLoadingCatalog, isLoadingAudits } = useCatalog()
+  const { catalogItems = [], auditLogs = [], isLoadingCatalog, isLoadingAudits } = useCatalog(canReadAudit)
   const { updateItem, deleteItem } = useStorage()
 
   // Dynamically extract unique categories from loaded catalog items
@@ -207,13 +207,15 @@ export default function CatalogPage() {
             Master Inventory Catalog
             {tab === 'catalog' && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-blue-600" />}
           </button>
-          <button onClick={() => setTab('audit')} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'audit' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
-            Immutable Audit Ledger
-            {tab === 'audit' && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-blue-600" />}
-          </button>
+          {canReadAudit && (
+            <button onClick={() => setTab('audit')} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'audit' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
+              Immutable Audit Ledger
+              {tab === 'audit' && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-blue-600" />}
+            </button>
+          )}
         </div>
 
-        {tab === 'catalog' ? (
+        {!canReadAudit || tab === 'catalog' ? (
           <section aria-label="Master Inventory Catalog">
             <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_200px_220px_auto]">
               <label className="relative">

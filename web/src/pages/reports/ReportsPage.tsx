@@ -69,7 +69,7 @@ function StatCard({ icon, eyebrow, value, label, accent }: { icon: IconName; eye
   )
 }
 
-export default function ReportsPage() {
+export default function ReportsPage({ canReadAudit }: { canReadAudit: boolean }) {
   const [range, setRange] = useState('Last 30 Days')
   const [location, setLocation] = useState('All Locations')
   const [query, setQuery] = useState('')
@@ -125,7 +125,7 @@ export default function ReportsPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard icon="sparkles" eyebrow="Estimated Money Saved" value="$12,450" label="Year to date" accent="bg-amber-50 text-amber-600" />
         <StatCard icon="trend" eyebrow="Waste Reduction Rate" value="94.2%" label="Safe consumption rate" accent="bg-emerald-50 text-emerald-600" />
-        <StatCard icon="clipboard" eyebrow="Active Audit Compliance" value="1,482" label="Immutable events logged" accent="bg-blue-50 text-blue-600" />
+        {canReadAudit && <StatCard icon="clipboard" eyebrow="Active Audit Compliance" value="1,482" label="Immutable events logged" accent="bg-blue-50 text-blue-600" />}
       </section> 
 
       <section className="mt-6 grid gap-4 xl:grid-cols-[1.45fr_1fr]">
@@ -200,7 +200,7 @@ export default function ReportsPage() {
         </article>
       </section> 
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      {canReadAudit && <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-[14px] font-semibold text-slate-900">Compliance &amp; Activity Ledger</h2>
@@ -261,7 +261,7 @@ export default function ReportsPage() {
             <p className="px-5 py-8 text-center text-sm text-slate-500">No ledger entries found.</p>
           )}
         </div>
-      </section>
+      </section>}
     </div>
   )
 }

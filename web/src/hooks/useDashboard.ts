@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { DashboardService } from '../api/DashboardService';
 
-export function useDashboard(locationId?: number) {
+export function useDashboard(canReadAudit: boolean, locationId?: number) {
     const service = new DashboardService();
 
     const metricsQuery = useQuery({
@@ -18,6 +18,7 @@ export function useDashboard(locationId?: number) {
 
     const auditLogsQuery = useQuery({
         queryKey: ['recent-audit-logs'],
+        enabled: canReadAudit,
         queryFn: () => service.getRecentAuditLogs(),
         retry: 1,
     });

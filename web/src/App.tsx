@@ -40,6 +40,7 @@ export default function App() {
   
   // Check if current user has admin privileges
   const isAdmin = userRole === 'Admin'
+  const canReadAudit = isAdmin || userRole === 'Manager'
 
   const workspaceItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -190,10 +191,10 @@ export default function App() {
 
         {/* Dynamic Screen Viewport */}
         <main className="flex-1 overflow-y-auto bg-[#f7f8fa] p-8">
-          {currentScreen === 'dashboard' && <DashboardPage onNavigate={navigateTo} />}
+          {currentScreen === 'dashboard' && <DashboardPage canReadAudit={canReadAudit} onNavigate={navigateTo} />}
           {currentScreen === 'storage' && <StoragePage />}
-          {currentScreen === 'catalog' && <CatalogPage />}
-          {currentScreen === 'reports' && <ReportsPage />}
+          {currentScreen === 'catalog' && <CatalogPage canReadAudit={canReadAudit} />}
+          {currentScreen === 'reports' && <ReportsPage canReadAudit={canReadAudit} />}
           {currentScreen === 'settings' && <SettingsPage />}
           {currentScreen === 'forecast' && <ForecastPage />}
         </main>
