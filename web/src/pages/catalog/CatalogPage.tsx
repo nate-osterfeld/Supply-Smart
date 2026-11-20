@@ -52,8 +52,11 @@ function Status({ value }: { value: string }) {
   );
 }
 
-export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean }) {
-  const [tab, setTab] = useState<'catalog' | 'audit'>('catalog')
+type CatalogTab = 'catalog' | 'audit'
+
+export default function CatalogPage({ canReadAudit, tab, onChangeTab }: {
+  canReadAudit: boolean; tab: CatalogTab; onChangeTab: (tab: CatalogTab) => void
+}) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All categories')
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
@@ -201,12 +204,12 @@ export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean })
         </div>
 
         <div className="mb-6 flex items-center gap-1 border-b border-slate-200">
-          <button onClick={() => setTab('catalog')} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'catalog' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => onChangeTab('catalog')} aria-pressed={tab === 'catalog'} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'catalog' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
             Master Inventory Catalog
             {tab === 'catalog' && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-blue-600" />}
           </button>
           {canReadAudit && (
-            <button onClick={() => setTab('audit')} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'audit' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
+            <button onClick={() => onChangeTab('audit')} aria-pressed={tab === 'audit'} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'audit' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
               Audit Ledger
               {tab === 'audit' && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-blue-600" />}
             </button>

@@ -81,7 +81,7 @@ export default function App() {
             <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
             <nav className="flex flex-col gap-1">
               {workspaceItems.map(({ id, label, icon: Icon }) => {
-                const active = currentScreen === id;
+                const active = currentScreen === id || (id === 'catalog' && currentScreen === 'audit');
                 return (
                   <button
                     key={id}
@@ -193,7 +193,9 @@ export default function App() {
         <main className="flex-1 overflow-y-auto bg-[#f7f8fa] p-8">
           {currentScreen === 'dashboard' && <DashboardPage canReadAudit={canReadAudit} onNavigate={navigateTo} />}
           {currentScreen === 'storage' && <StoragePage />}
-          {currentScreen === 'catalog' && <CatalogPage canReadAudit={canReadAudit} />}
+          {(currentScreen === 'catalog' || currentScreen === 'audit') && (
+            <CatalogPage canReadAudit={canReadAudit} tab={currentScreen} onChangeTab={navigateTo} />
+          )}
           {currentScreen === 'reports' && <ReportsPage canReadAudit={canReadAudit} />}
           {currentScreen === 'settings' && <SettingsPage />}
           {currentScreen === 'forecast' && <ForecastPage />}

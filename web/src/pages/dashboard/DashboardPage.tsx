@@ -151,10 +151,10 @@ export default function DashboardPage({ onNavigate, canReadAudit }: { canReadAud
               </tbody>
             </table>
             <button 
-              onClick={() => onNavigate?.('catalog')}
+              onClick={() => onNavigate?.('audit')}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
             >
-              View Full Audit Log <ChevronRight className="size-4" />
+              View audit history <ChevronRight className="size-4" />
             </button>
           </div>
         </section>}
