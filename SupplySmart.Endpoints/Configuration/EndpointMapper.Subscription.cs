@@ -40,10 +40,12 @@ public static partial class EndpointMapper
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         subscriptionEndpoints.MapPost("/verify-session", SubscriptionEndpoints.VerifySession)
+            .RequireAuthorization(policy => policy.RequireRole("Admin"))
             .WithName("VerifySubscriptionSession")
             .WithDescription("Verifies a completed Stripe Checkout session and immediately syncs the organization quota.")
             .Produces<SubscriptionDetailsDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         // Public webhook endpoint (Stripe calls this directly, no tenant authorization cookie needed)
@@ -53,6 +55,7 @@ public static partial class EndpointMapper
             .WithDescription("Receives asynchronous webhook events from Stripe.")
             .AllowAnonymous()
             .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest);
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status503ServiceUnavailable);
     }
 }

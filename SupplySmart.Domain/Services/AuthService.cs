@@ -7,6 +7,8 @@ using SupplySmart.Integrations.Repositories;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace SupplySmart.Domain.Services
 {
@@ -14,11 +16,13 @@ namespace SupplySmart.Domain.Services
     {
         Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
         Task<AuthResponseDto> LoginAsync(LoginDto dto);
+        Task LogoutAsync(int userId);
         Task<List<LocationDto>> GetLocationsForUserAsync(int organizationId);
     }
 
     public class AuthService : IAuthService
     {
+        public static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(7);
         private readonly IBaseRepository<Organization> _orgRepo;
         private readonly IBaseRepository<User> _userRepo;
         private readonly IBaseRepository<Location> _locationRepo;
@@ -42,6 +46,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
+            Validator.ValidateObject(dto, new ValidationContext(dto), validateAllProperties: true);
             var existingUser = await _userRepo.GetByConditionAsync(u => u.Email == dto.Email);
             if (existingUser != null)
             {
@@ -102,6 +107,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
         {
+            Validator.ValidateObject(dto, new ValidationContext(dto), validateAllProperties: true);
             var user = await _userRepo.GetByConditionAsync(u => u.Email == dto.Email, includes: new[] { "Organization" });
             if (user == null)
             {
@@ -135,6 +141,14 @@ namespace SupplySmart.Domain.Services
             };
         }
 
+        public async Task LogoutAsync(int userId)
+        {
+            var stamp = Guid.NewGuid();
+            // Update only the revocation stamp, without writing back a stale account snapshot.
+            await _userRepo.GetQueryable().Where(u => u.Id == userId)
+                .ExecuteUpdateAsync(update => update.SetProperty(u => u.SecurityStamp, stamp));
+        }
+
         public async Task<List<LocationDto>> GetLocationsForUserAsync(int organizationId)
         {
             var locations = await _locationRepo.GetAllByConditionAsync(l => l.OrganizationId == organizationId);
@@ -159,13 +173,15 @@ namespace SupplySmart.Domain.Services
                 new Claim(ClaimTypes.Name, user.FullName),
                 new Claim(ClaimTypes.Role, user.Role.ToString()),
                 new Claim("OrganizationId", organizationId.ToString()),
+                new Claim("SecurityStamp", user.SecurityStamp.ToString("N")),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
                 new Claim(JwtRegisteredClaimNames.GivenName, user.FullName)
             };
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddDays(7),
+                Expires = DateTime.UtcNow.Add(TokenLifetime),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 

@@ -10,7 +10,6 @@ export function useUsers() {
         queryKey: ['tenant-users'],
         queryFn: () => service.getUsers(),
         retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token'),
     });
 
     const inviteMutation = useMutation({

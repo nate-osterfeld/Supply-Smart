@@ -10,6 +10,9 @@ namespace SupplySmart.Endpoints.Endpoints
 {
     public abstract class LocationEndpoints
     {
+        private static ProblemHttpResult StorageParentNotFound() =>
+            TypedResults.Problem(title: "Storage parent not found.", statusCode: StatusCodes.Status404NotFound);
+
         public static async Task<Results<Ok<IEnumerable<LocationDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetLocations(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
@@ -119,7 +122,7 @@ namespace SupplySmart.Endpoints.Endpoints
                 if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
 
                 var room = await locationService.CreateRoomAsync(orgId, locationId, dto.Name);
-                return TypedResults.Ok(room);
+                return room is null ? StorageParentNotFound() : TypedResults.Ok(room);
             }
             catch (Exception ex)
             {
@@ -185,7 +188,7 @@ namespace SupplySmart.Endpoints.Endpoints
                 if (orgIdClaim == null || !int.TryParse(orgIdClaim, out var orgId)) return TypedResults.Unauthorized();
 
                 var container = await locationService.CreateContainerAsync(orgId, roomId, dto.Name, dto.Kind, dto.ParentContainerId);
-                return TypedResults.Ok(container);
+                return container is null ? StorageParentNotFound() : TypedResults.Ok(container);
             }
             catch (Exception ex)
             {
@@ -252,7 +255,7 @@ namespace SupplySmart.Endpoints.Endpoints
                 var userEmail = claimsPrincipal.FindFirst(ClaimTypes.Email)?.Value ?? "system@supplysmart.com";
 
                 var item = await locationService.AddItemAsync(orgId, containerId, dto, userEmail);
-                return TypedResults.Ok(item);
+                return item is null ? StorageParentNotFound() : TypedResults.Ok(item);
             }
             catch (Exception ex)
             {

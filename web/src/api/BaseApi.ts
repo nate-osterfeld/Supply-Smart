@@ -5,17 +5,18 @@ import axios, {
     type AxiosResponse,
     type InternalAxiosRequestConfig,
 } from 'axios';
+import { apiBaseUrl, csrfHeader, sessionRequestToken } from './browserSession';
 
 export class BaseApi {
     protected api: AxiosInstance;
-    protected baseUrl: string = '';
     protected usesAuth: boolean;
 
     public constructor(usesAuth: boolean = true) {
         this.usesAuth = usesAuth;
-        this.baseUrl = import.meta.env.VITE_BASEURL || '';
         
         this.api = axios.create({
+            baseURL: apiBaseUrl,
+            allowAbsoluteUrls: false,
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-cache',
@@ -23,14 +24,11 @@ export class BaseApi {
             }
         });
 
-        // Request Interceptor: Automatically attach JWT token if required
         this.api.interceptors.request.use(
-            async (request: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> => {
-                if (this.usesAuth) {
-                    const token = localStorage.getItem('supplysmart_token');
-                    if (token && request.headers) {
-                        request.headers.Authorization = `Bearer ${token}`;
-                    }
+            (request: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+                const token = sessionRequestToken();
+                if (token && !['get', 'head', 'options'].includes(request.method ?? 'get') && !request.headers.has(csrfHeader)) {
+                    request.headers.set(csrfHeader, token);
                 }
                 return request;
             },
@@ -42,8 +40,8 @@ export class BaseApi {
             (response: AxiosResponse) => response,
             (error: AxiosError) => {
                 const errorMsg = this.getErrorMsg(error);
-                if (error.response?.status === 401) {
-                    localStorage.clear();
+                if (this.usesAuth && error.response?.status === 401) {
+                    sessionStorage.removeItem('supplysmart_location_id');
                     window.location.replace('/');
                 }
                 return Promise.reject(new Error(errorMsg));
@@ -52,19 +50,19 @@ export class BaseApi {
     }
 
     protected get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.get<T>(`${this.baseUrl}/${url}`, config);
+        return this.api.get<T>(url, config);
     }
 
     protected post<T>(url: string, data?: object | string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.post<T>(`${this.baseUrl}/${url}`, data, config);
+        return this.api.post<T>(url, data, config);
     }
 
     protected put<T>(url: string, data?: object, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.put<T>(`${this.baseUrl}${url}`, data, config);
+        return this.api.put<T>(url, data, config);
     }
 
     protected delete<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-        return this.api.delete<T>(`${this.baseUrl}${url}`, config);
+        return this.api.delete<T>(url, config);
     }
 
     private getErrorMsg(err: unknown): string {

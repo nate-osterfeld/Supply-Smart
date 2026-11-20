@@ -1,10 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export default function RequireAuth() {
-    const token = localStorage.getItem('supplysmart_token');
-
-    // If no token exists, redirect to login page
-    if (!token) {
+    if (!useCurrentUser()) {
         return <Navigate to="/" replace />;
     }
 

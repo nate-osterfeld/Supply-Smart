@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using SupplySmart.Integrations.Models.Data;
+using System.Security.Cryptography;
 using SupplySmart.Integrations.Models.DTO;
 using SupplySmart.Integrations.Repositories;
 
@@ -46,9 +47,12 @@ namespace SupplySmart.Domain.Services
                 throw new InvalidOperationException("A user with this email address already exists.");
             }
 
-            if (!Enum.TryParse<UserRole>(dto.Role, true, out var parsedRole))
+            var requestedRole = dto.Role?.Trim();
+            if (!Enum.TryParse<UserRole>(requestedRole, true, out var parsedRole) ||
+                !Enum.IsDefined(parsedRole) ||
+                !string.Equals(requestedRole, parsedRole.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                parsedRole = UserRole.Manager;
+                throw new InvalidOperationException("Choose an explicit role: Admin, Manager, or Staff.");
             }
 
             // Generate a secure random temporary password
@@ -92,8 +96,7 @@ namespace SupplySmart.Domain.Services
         private string GenerateSecureTempPassword()
         {
             const string chars = "ABCDEFGHJKLMNOPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789!@#$%^&*";
-            var random = new Random();
-            return new string(Enumerable.Repeat(chars, 12).Select(s => s[random.Next(s.Length)]).ToArray());
+            return RandomNumberGenerator.GetString(chars, 12);
         }
 
         public async Task<bool> DeleteUserAsync(int organizationId, int targetUserId, string adminEmail)

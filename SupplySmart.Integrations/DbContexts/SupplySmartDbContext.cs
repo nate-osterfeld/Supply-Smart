@@ -62,6 +62,7 @@ namespace SupplySmart.Integrations.DbContexts
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
                 entity.Property(e => e.FullName).IsRequired().HasMaxLength(150);
+                entity.Property(e => e.SecurityStamp).HasDefaultValueSql("NEWID()");
 
                 entity.Property(e => e.Email)
                       .IsRequired()
@@ -247,6 +248,31 @@ namespace SupplySmart.Integrations.DbContexts
                       .HasForeignKey(e => e.OrganizationId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            RotateChangedUserSecurityStamps();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            RotateChangedUserSecurityStamps();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private void RotateChangedUserSecurityStamps()
+        {
+            ChangeTracker.DetectChanges();
+            foreach (var entry in ChangeTracker.Entries<User>().Where(e => e.State == EntityState.Modified))
+            {
+                if (entry.Property(u => u.PasswordHash).IsModified || entry.Property(u => u.Role).IsModified ||
+                    entry.Property(u => u.OrganizationId).IsModified || entry.Property(u => u.Email).IsModified)
+                {
+                    entry.Property(u => u.SecurityStamp).CurrentValue = Guid.NewGuid();
+                }
+            }
         }
 
         private void UpdateTimestamps(

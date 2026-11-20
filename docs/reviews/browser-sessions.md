@@ -1,0 +1,7 @@
+# Browser sign-in and request protection
+
+Browser sign-in and registration issue a seven-day, host-only JWT cookie named `__Host-SupplySmart-Session`. It has `Secure`, `HttpOnly`, `SameSite=Strict` and `Path=/`. The browser receives the profile in JSON and restores it from `GET /api/auth/session` on navigation. The app removes credentials left by previous versions of the frontend. Other API clients can continue to exchange credentials for a bearer token at the existing API endpoints. Both sign-in routes use the same password checks and attempt limit.
+
+The server checks the browser's exact Origin on every cookie-authenticated write. Sign-in and registration also require a custom header, which browsers cannot send in a cross-origin form. After sign-in, the header must match a random identifier in the signed session that loaded the page. The frontend keeps this request value in memory. Origin checks use the request origin or the configured `FrontendUrl`, independently of forwarded headers. Bearer API clients and signed Stripe deliveries without cookies keep their own authentication paths.
+
+Deploy the earlier `AddUserSecurityStamp` migration before rolling out this branch. Serve the frontend and API on the same public HTTPS origin. The deployment workflows supply `FrontendUrl` for each environment. The local Vite proxy uses `http://localhost:5173`. The browser reads the active account from the server after sign-in, refresh, an account switch in another tab, or sign-out. Sign-out revokes the account's sessions and expires the browser cookie.

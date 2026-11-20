@@ -528,20 +528,19 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
     const sessionId = params.get('session_id');
     const billingSuccess = params.get('billing_success');
     const billingCanceled = params.get('billing_canceled');
-    const targetPlan = params.get('plan');
 
     if (billingSuccess === 'true') {
       hasCheckedParams.current = true;
       if (sessionId) {
         verifySession(sessionId)
-          .then(() => {
-            addToast('Subscription Upgraded', `Successfully upgraded workspace to the ${targetPlan ?? 'new'} Plan!`);
+          .then(details => {
+            addToast('Current subscription', `Your workspace is on the ${details.planName} plan.`);
           })
           .catch(() => {
-            addToast('Verification Warning', 'Payment succeeded, please refresh if your plan quota has not updated yet.', 'error');
+            addToast('Verification unavailable', 'Refresh billing settings to check your current plan.', 'error');
           });
       } else {
-        addToast('Subscription Updated', `Successfully switched workspace to the ${targetPlan ?? 'new'} Plan.`);
+        addToast('Verification unavailable', 'The checkout reference is missing. Check your current plan below.', 'error');
       }
 
       params.delete('session_id');

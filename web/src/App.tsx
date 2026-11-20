@@ -1,4 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { AuthService } from './api/AuthService';
+import { sessionChanged } from './api/browserSession';
+import { useCurrentUser } from './hooks/useCurrentUser';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -13,7 +17,6 @@ import {
   User
 } from 'lucide-react';
 
-import AuthPage from './pages/auth/AuthPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import StoragePage from './pages/storage/StoragePage';
 import CatalogPage from './pages/catalog/CatalogPage';
@@ -22,24 +25,22 @@ import ReportsPage from './pages/reports/ReportsPage';
 import ForecastPage from './pages/forecast/ForecastPage';
 
 export default function App() {
+  const queryClient = useQueryClient();
+  const user = useCurrentUser();
   const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
-
-  useEffect(() => {
-    const token = localStorage.getItem('supplysmart_token');
-    if (!token) {
-      setCurrentScreen('auth');
-    }
-  }, []);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
 
   const navigateTo = (screenName: string) => {
     setCurrentScreen(screenName);
   };
 
-  const userName = localStorage.getItem('supplysmart_name') || 'Workspace User';
-  const userRole = localStorage.getItem('supplysmart_role') || 'Staff';
+  const userName = user?.fullName ?? 'Workspace User';
+  const userRole = user?.role ?? 'Staff';
   
   // Check if current user has admin privileges
   const isAdmin = userRole === 'Admin'
+  const canReadAudit = isAdmin || userRole === 'Manager'
 
   const workspaceItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -53,10 +54,6 @@ export default function App() {
   const manageItems = isAdmin ? [
     { id: 'settings', label: 'Workspace Settings', icon: Settings2 },
   ] : [];
-
-  if (currentScreen === 'auth' || !localStorage.getItem('supplysmart_token')) {
-    return <AuthPage />;
-  }
 
   const initials = userName
     .split(' ')
@@ -84,7 +81,7 @@ export default function App() {
             <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
             <nav className="flex flex-col gap-1">
               {workspaceItems.map(({ id, label, icon: Icon }) => {
-                const active = currentScreen === id;
+                const active = currentScreen === id || (id === 'catalog' && currentScreen === 'audit');
                 return (
                   <button
                     key={id}
@@ -129,12 +126,23 @@ export default function App() {
 
         <div className="border-t border-slate-200/80 p-4">
           <button 
-            onClick={() => {
-              localStorage.clear();
-              navigateTo('auth');
+            onClick={async () => {
+              setIsSigningOut(true);
+              setSignOutError('');
+              try {
+                await new AuthService().logout();
+                await queryClient.cancelQueries();
+                queryClient.clear();
+                sessionChanged();
+              } catch {
+                setSignOutError('Sign-out failed. Please try again.');
+              } finally {
+                setIsSigningOut(false);
+              }
             }}
+            disabled={isSigningOut}
             className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-50 transition-colors group"
-            title="Click to sign out"
+            title="Sign out on all devices"
           >
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
               {initials}
@@ -145,6 +153,7 @@ export default function App() {
             </div>
             <ChevronDown className="size-4 text-slate-400 transition-transform group-hover:translate-y-0.5" />
           </button>
+          {signOutError && <p role="alert" className="mt-2 px-2 text-xs text-red-700">{signOutError}</p>}
         </div>
       </aside>
 
@@ -182,10 +191,12 @@ export default function App() {
 
         {/* Dynamic Screen Viewport */}
         <main className="flex-1 overflow-y-auto bg-[#f7f8fa] p-8">
-          {currentScreen === 'dashboard' && <DashboardPage onNavigate={navigateTo} />}
+          {currentScreen === 'dashboard' && <DashboardPage canReadAudit={canReadAudit} onNavigate={navigateTo} />}
           {currentScreen === 'storage' && <StoragePage />}
-          {currentScreen === 'catalog' && <CatalogPage />}
-          {currentScreen === 'reports' && <ReportsPage />}
+          {(currentScreen === 'catalog' || currentScreen === 'audit') && (
+            <CatalogPage canReadAudit={canReadAudit} tab={currentScreen} onChangeTab={navigateTo} />
+          )}
+          {currentScreen === 'reports' && <ReportsPage canReadAudit={canReadAudit} />}
           {currentScreen === 'settings' && <SettingsPage />}
           {currentScreen === 'forecast' && <ForecastPage />}
         </main>

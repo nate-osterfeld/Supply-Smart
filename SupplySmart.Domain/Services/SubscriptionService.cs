@@ -10,6 +10,8 @@ using SupplySmart.Integrations.Models.DTO;
 
 namespace SupplySmart.Domain.Services
 {
+    public sealed class InvalidStripeWebhookException(Exception cause) : Exception("Invalid Stripe notification.", cause) { }
+
     public interface ISubscriptionService
     {
         Task<SubscriptionDetailsDto> GetSubscriptionDetailsAsync(int organizationId);
@@ -23,23 +25,19 @@ namespace SupplySmart.Domain.Services
     {
         private readonly SupplySmartDbContext _context;
         private readonly IConfiguration _configuration;
-        private readonly string _secretKey;
+        private readonly IStripeClient? _stripe;
         private readonly string _webhookSecret;
         private readonly string _frontendUrl;
 
-        public SubscriptionService(SupplySmartDbContext context, IConfiguration configuration)
+        public SubscriptionService(SupplySmartDbContext context, IConfiguration configuration, IStripeClient? stripeClient = null)
         {
             _context = context;
             _configuration = configuration;
 
-            _secretKey = _configuration["StripeSettings:SecretKey"] ?? string.Empty;
+            var secretKey = _configuration["StripeSettings:SecretKey"];
+            _stripe = stripeClient ?? (string.IsNullOrWhiteSpace(secretKey) ? null : new StripeClient(secretKey));
             _webhookSecret = _configuration["StripeSettings:WebhookSecret"] ?? string.Empty;
             _frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
-
-            if (!string.IsNullOrWhiteSpace(_secretKey))
-            {
-                StripeConfiguration.ApiKey = _secretKey;
-            }
         }
 
         public async Task<SubscriptionDetailsDto> GetSubscriptionDetailsAsync(int organizationId)
@@ -59,8 +57,6 @@ namespace SupplySmart.Domain.Services
             var usedItemsCount = await _context.InventoryItems
                 .CountAsync(i => i.OrganizationId == organizationId);
 
-            var isStripeConfigured = !string.IsNullOrWhiteSpace(_secretKey);
-
             return new SubscriptionDetailsDto
             {
                 PlanName = string.IsNullOrWhiteSpace(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan,
@@ -71,7 +67,7 @@ namespace SupplySmart.Domain.Services
                 MaxRoomsQuota = org.MaxRoomsQuota > 0 ? org.MaxRoomsQuota : 2,
                 UsedItemsCount = usedItemsCount,
                 MaxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50,
-                IsStripeConfigured = isStripeConfigured,
+                IsStripeConfigured = _stripe is not null,
                 StripeCustomerId = org.StripeCustomerId
             };
         }
@@ -95,14 +91,7 @@ namespace SupplySmart.Domain.Services
                 _ => throw new ArgumentException("Invalid subscription plan selected. Choose Free, Starter, Professional, or Enterprise.")
             };
 
-            var (targetRoomsQuota, targetItemsQuota) = normalizedPlan switch
-            {
-                "Free" => (2, 50),
-                "Starter" => (5, 250),
-                "Professional" => (15, 1500),
-                "Enterprise" => (9999, 999999),
-                _ => (2, 50)
-            };
+            var (targetRoomsQuota, targetItemsQuota) = QuotasFor(normalizedPlan);
 
             var currentRoomsCount = await _context.Rooms
                 .CountAsync(r => r.OrganizationId == organizationId);
@@ -122,15 +111,15 @@ namespace SupplySmart.Domain.Services
                     $"Cannot switch to the {normalizedPlan} Plan ({targetItemsQuota} items max) because your workspace currently tracks {currentItemsCount} inventory items.");
             }
 
-            string priceId = normalizedPlan switch
-            {
-                "Starter" => _configuration["StripeSettings:StarterPriceId"] ?? string.Empty,
-                "Professional" => _configuration["StripeSettings:ProfessionalPriceId"] ?? string.Empty,
-                "Enterprise" => _configuration["StripeSettings:EnterprisePriceId"] ?? string.Empty,
-                _ => string.Empty
-            };
+            var priceId = _configuration[$"StripeSettings:{normalizedPlan}PriceId"];
 
-            if (string.IsNullOrWhiteSpace(_secretKey) || normalizedPlan == "Free" || string.IsNullOrWhiteSpace(priceId))
+            if (normalizedPlan != "Free" &&
+                (_stripe is null || string.IsNullOrWhiteSpace(priceId)))
+            {
+                throw new InvalidOperationException("Paid subscriptions are unavailable until Stripe billing is configured.");
+            }
+
+            if (normalizedPlan == "Free")
             {
                 ApplyLocalPlanUpdate(org, normalizedPlan, targetRoomsQuota, targetItemsQuota, userEmail);
                 await _context.SaveChangesAsync();
@@ -145,7 +134,7 @@ namespace SupplySmart.Domain.Services
 
             if (string.IsNullOrEmpty(org.StripeCustomerId))
             {
-                var customerService = new CustomerService();
+                var customerService = new CustomerService(_stripe);
                 var customer = await customerService.CreateAsync(new CustomerCreateOptions
                 {
                     Name = org.Name,
@@ -173,7 +162,10 @@ namespace SupplySmart.Domain.Services
                 }
             };
 
-            var service = new SessionService();
+            if (!string.IsNullOrEmpty(org.StripeSubscriptionId))
+                options.Metadata["PreviousSubscriptionId"] = org.StripeSubscriptionId;
+
+            var service = new SessionService(_stripe);
             var session = await service.CreateAsync(options);
 
             return new SubscriptionCheckoutResponseDto
@@ -187,7 +179,7 @@ namespace SupplySmart.Domain.Services
         public async Task<SubscriptionPortalResponseDto> CreateCustomerPortalSessionAsync(int organizationId)
         {
             var org = await _context.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == organizationId);
-            if (org == null || string.IsNullOrEmpty(org.StripeCustomerId))
+            if (_stripe is null || org == null || string.IsNullOrEmpty(org.StripeCustomerId))
             {
                 throw new InvalidOperationException("No active billing profile or customer ID found for this organization.");
             }
@@ -198,7 +190,7 @@ namespace SupplySmart.Domain.Services
                 ReturnUrl = $"{_frontendUrl}/dashboard?tab=settings"
             };
 
-            var service = new Stripe.BillingPortal.SessionService();
+            var service = new Stripe.BillingPortal.SessionService(_stripe);
             var portalSession = await service.CreateAsync(options);
 
             return new SubscriptionPortalResponseDto
@@ -209,124 +201,147 @@ namespace SupplySmart.Domain.Services
 
         public async Task<SubscriptionDetailsDto> VerifyAndSyncSessionAsync(int organizationId, string sessionId)
         {
-            if (string.IsNullOrWhiteSpace(_secretKey) || string.IsNullOrWhiteSpace(sessionId))
-            {
-                return await GetSubscriptionDetailsAsync(organizationId);
-            }
-
-            var sessionService = new SessionService();
-            var session = await sessionService.GetAsync(sessionId);
-
-            if (session != null && session.PaymentStatus == "paid")
-            {
-                if (session.Metadata.TryGetValue("TargetPlan", out var targetPlan) &&
-                    session.Metadata.TryGetValue("OrganizationId", out var orgIdStr) &&
-                    int.TryParse(orgIdStr, out var orgId) && orgId == organizationId)
-                {
-                    var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Id == orgId);
-                    if (org != null)
-                    {
-                        org.StripeSubscriptionId = session.SubscriptionId;
-
-                        var (rooms, items) = targetPlan switch
-                        {
-                            "Starter" => (5, 250),
-                            "Professional" => (15, 1500),
-                            "Enterprise" => (9999, 999999),
-                            _ => (2, 50)
-                        };
-
-                        ApplyLocalPlanUpdate(org, targetPlan, rooms, items, "Stripe Webhook/Verify");
-                        await _context.SaveChangesAsync();
-                    }
-                }
-            }
-
+            if (_stripe is not null && !string.IsNullOrWhiteSpace(sessionId))
+                await SyncPaidCheckoutAsync(organizationId, sessionId, "Stripe Checkout Verification");
             return await GetSubscriptionDetailsAsync(organizationId);
         }
 
         public async Task HandleStripeWebhookAsync(string jsonPayload, string stripeSignatureHeader)
         {
-            if (string.IsNullOrWhiteSpace(_webhookSecret)) return;
-
-            var stripeEvent = EventUtility.ConstructEvent(jsonPayload, stripeSignatureHeader, _webhookSecret);
-
-            if (stripeEvent.Type == "checkout.session.completed")
+            if (string.IsNullOrWhiteSpace(_webhookSecret))
+                throw new InvalidOperationException("Stripe webhook signing is not configured.");
+            Event stripeEvent;
+            try
             {
-                var session = stripeEvent.Data.Object as Session;
-                if (session != null && session.Metadata.TryGetValue("OrganizationId", out var orgIdStr) &&
-                    int.TryParse(orgIdStr, out var orgId) &&
-                    session.Metadata.TryGetValue("TargetPlan", out var targetPlan))
-                {
-                    var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Id == orgId);
-                    if (org != null)
-                    {
-                        org.StripeSubscriptionId = session.SubscriptionId;
-                        var (rooms, items) = targetPlan switch
-                        {
-                            "Starter" => (5, 250),
-                            "Professional" => (15, 1500),
-                            "Enterprise" => (9999, 999999),
-                            _ => (2, 50)
-                        };
-
-                        ApplyLocalPlanUpdate(org, targetPlan, rooms, items, "Stripe Webhook");
-                        await _context.SaveChangesAsync();
-                    }
-                }
+                stripeEvent = EventUtility.ConstructEvent(jsonPayload, stripeSignatureHeader, _webhookSecret);
             }
-            else if (stripeEvent.Type == "customer.subscription.updated" || stripeEvent.Type == "customer.subscription.deleted")
+            catch (Exception ex) when (ex is StripeException or Newtonsoft.Json.JsonException or ArgumentException or FormatException or OverflowException)
             {
-                var subscription = stripeEvent.Data.Object as Stripe.Subscription;
-                if (subscription != null)
-                {
-                    var org = await _context.Organizations.FirstOrDefaultAsync(o => o.StripeCustomerId == subscription.CustomerId);
-                    if (org != null)
-                    {
-                        // If subscription was deleted or explicitly canceled
-                        if (stripeEvent.Type == "customer.subscription.deleted" || subscription.Status == "canceled")
-                        {
-                            ApplyLocalPlanUpdate(org, "Free", 2, 50, "Stripe Webhook (Canceled)");
-                        }
-                        else if (subscription.Items?.Data != null && subscription.Items.Data.Count > 0)
-                        {
-                            var priceId = subscription.Items.Data[0].Price?.Id;
-                            string planName = "Free";
-                            int rooms = 2;
-                            int items = 50;
+                throw new InvalidStripeWebhookException(ex);
+            }
 
-                            if (priceId == _configuration["StripeSettings:StarterPriceId"])
-                            {
-                                planName = "Starter";
-                                rooms = 5;
-                                items = 250;
-                            }
-                            else if (priceId == _configuration["StripeSettings:ProfessionalPriceId"])
-                            {
-                                planName = "Professional";
-                                rooms = 15;
-                                items = 1500;
-                            }
-                            else if (priceId == _configuration["StripeSettings:EnterprisePriceId"])
-                            {
-                                planName = "Enterprise";
-                                rooms = 9999;
-                                items = 999999;
-                            }
-
-                            ApplyLocalPlanUpdate(org, planName, rooms, items, "Stripe Webhook (Updated)");
-                        }
-
-                        await _context.SaveChangesAsync();
-                    }
-                }
+            if (stripeEvent.Type is "checkout.session.completed" or "checkout.session.async_payment_succeeded")
+            {
+                if (stripeEvent.Data.Object is Session { PaymentStatus: "paid" } session &&
+                    session.Metadata?.TryGetValue("OrganizationId", out var orgId) == true &&
+                    int.TryParse(orgId, out var organizationId) && !string.IsNullOrEmpty(session.Id))
+                    await SyncPaidCheckoutAsync(organizationId, session.Id, "Stripe Webhook");
+            }
+            else if ((stripeEvent.Type is "customer.subscription.updated" or "customer.subscription.deleted") &&
+                     stripeEvent.Data.Object is Stripe.Subscription subscription)
+            {
+                await SyncSubscriptionEventAsync(subscription, stripeEvent.Type == "customer.subscription.deleted");
             }
         }
 
-        private void ApplyLocalPlanUpdate(Organization org, string plan, int roomsQuota, int itemsQuota, string updatedBy)
+        private async Task SyncPaidCheckoutAsync(int organizationId, string sessionId, string actor)
+        {
+            if (_stripe is null) throw new InvalidOperationException("Stripe billing is unavailable.");
+            var checkout = await new SessionService(_stripe).GetAsync(sessionId,
+                new SessionGetOptions { Expand = ["subscription"] });
+            if (checkout.Mode != "subscription" || checkout.Status != "complete" || checkout.PaymentStatus != "paid")
+                return;
+            if (checkout.Metadata?.TryGetValue("OrganizationId", out var clinicId) != true ||
+                !int.TryParse(clinicId, out var clinic) || clinic != organizationId)
+                return;
+            if (checkout.Subscription is not { Status: "active" or "trialing" } subscription ||
+                string.IsNullOrEmpty(subscription.Id) || string.IsNullOrEmpty(checkout.CustomerId) ||
+                subscription.CustomerId != checkout.CustomerId)
+                return;
+
+            var plan = PaidPlanFor(subscription);
+            if (plan is null) return;
+            var org = await _context.Organizations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == organizationId);
+            if (org is null || org.StripeCustomerId != checkout.CustomerId) return;
+            if (org.StripeSubscriptionId == subscription.Id)
+            {
+                // A historical receipt must not undo an explicit switch to the Free plan.
+                if (org.SubscriptionPlan != "Free" || org.SubscriptionStatus == "Unpaid")
+                    await SaveStripePlanAsync(org, subscription.Id, plan, "Active", actor);
+                return;
+            }
+
+            if (org.StripeSubscriptionId is { } currentId &&
+                checkout.Metadata.GetValueOrDefault("PreviousSubscriptionId") != currentId)
+            {
+                // Older checkouts lack predecessor metadata. Only a newer subscription may replace the linked one.
+                var linked = await new Stripe.SubscriptionService(_stripe).GetAsync(currentId);
+                if (linked.CustomerId != checkout.CustomerId || subscription.Created <= linked.Created) return;
+            }
+
+            await SaveStripePlanAsync(org, subscription.Id, plan, "Active", actor);
+        }
+
+        private async Task SyncSubscriptionEventAsync(Stripe.Subscription signal, bool deleted)
+        {
+            if (string.IsNullOrWhiteSpace(signal.CustomerId) || string.IsNullOrWhiteSpace(signal.Id)) return;
+            var org = await _context.Organizations.AsNoTracking().SingleOrDefaultAsync(o =>
+                o.StripeCustomerId == signal.CustomerId && o.StripeSubscriptionId == signal.Id);
+            if (org is null || org.StripeCustomerId != signal.CustomerId || org.StripeSubscriptionId != signal.Id) return;
+
+            string plan = "Free";
+            string status = "Canceled";
+            if (!deleted)
+            {
+                if (_stripe is null) throw new InvalidOperationException("Stripe billing is unavailable.");
+                // Stripe may deliver updates out of order. Read the subscription as it exists now.
+                var current = await new Stripe.SubscriptionService(_stripe).GetAsync(signal.Id);
+                if (current.Id != signal.Id || current.CustomerId != signal.CustomerId) return;
+                if (current.Status is "active" or "trialing")
+                {
+                    plan = PaidPlanFor(current) ?? "Free";
+                    status = "Active";
+                }
+                else if (current.Status == "unpaid")
+                    status = "Unpaid";
+                else if (current.Status is not ("canceled" or "incomplete_expired"))
+                    return;
+            }
+
+            await SaveStripePlanAsync(org, signal.Id, plan, status, "Stripe Webhook");
+        }
+
+        private async Task SaveStripePlanAsync(Organization observed, string subscriptionId, string plan, string status, string actor)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var org = await _context.Organizations.SingleOrDefaultAsync(o => o.Id == observed.Id);
+            if (org is null || org.StripeCustomerId != observed.StripeCustomerId) return;
+            var (rooms, items) = QuotasFor(plan);
+            if (org.StripeSubscriptionId == subscriptionId && org.SubscriptionPlan == plan && org.SubscriptionStatus == status &&
+                org.MaxRoomsQuota == rooms && org.MaxItemsQuota == items) return;
+            if (org.StripeSubscriptionId != observed.StripeSubscriptionId || org.SubscriptionPlan != observed.SubscriptionPlan ||
+                org.SubscriptionStatus != observed.SubscriptionStatus)
+                throw new DbUpdateConcurrencyException("The clinic's billing state changed during synchronization.");
+            org.StripeSubscriptionId = subscriptionId;
+            ApplyLocalPlanUpdate(org, plan, rooms, items, actor, status);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+
+        private string? PaidPlanFor(Stripe.Subscription subscription)
+        {
+            if (subscription.Items is not { HasMore: false, Data: { } items }) return null;
+            var matching = new[] { "Starter", "Professional", "Enterprise" }.Where(tier =>
+            {
+                var priceId = _configuration[$"StripeSettings:{tier}PriceId"];
+                return !string.IsNullOrWhiteSpace(priceId) && items.Any(i => i.Quantity > 0 && i.Price?.Id == priceId);
+            }).ToArray();
+            return matching.Length == 1 ? matching[0] : null;
+        }
+
+        private static (int Rooms, int Items) QuotasFor(string plan) => plan switch
+        {
+            "Free" => (2, 50),
+            "Starter" => (5, 250),
+            "Professional" => (15, 1500),
+            "Enterprise" => (9999, 999999),
+            _ => throw new ArgumentException("Unknown subscription tier.")
+        };
+
+        private void ApplyLocalPlanUpdate(Organization org, string plan, int roomsQuota, int itemsQuota, string updatedBy, string status = "Active")
         {
             org.SubscriptionPlan = plan;
-            org.SubscriptionStatus = "Active";
+            org.SubscriptionStatus = status;
             org.MaxRoomsQuota = roomsQuota;
             org.MaxItemsQuota = itemsQuota;
             if (org.RenewalDateUtc == default || org.RenewalDateUtc < DateTime.UtcNow)

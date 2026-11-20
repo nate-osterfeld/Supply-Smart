@@ -138,19 +138,25 @@ public abstract class SubscriptionEndpoints
         ISubscriptionService subscriptionService,
         ILogger<SubscriptionEndpoints> logger)
     {
+        var signatureHeader = request.Headers["Stripe-Signature"].ToString();
+        if (string.IsNullOrWhiteSpace(signatureHeader)) return Results.BadRequest("Invalid Stripe notification.");
+
         try
         {
             using var reader = new StreamReader(request.Body);
-            var json = await reader.ReadToEndAsync();
-            var signatureHeader = request.Headers["Stripe-Signature"].ToString();
+            var json = await reader.ReadToEndAsync(request.HttpContext.RequestAborted);
 
             await subscriptionService.HandleStripeWebhookAsync(json, signatureHeader);
             return Results.Ok();
         }
-        catch (Exception ex)
+        catch (InvalidStripeWebhookException)
+        {
+            return Results.BadRequest("Invalid Stripe notification.");
+        }
+        catch (Exception ex) when (!request.HttpContext.RequestAborted.IsCancellationRequested)
         {
             logger.LogError(ex, "Error processing Stripe webhook.");
-            return Results.BadRequest($"Webhook error: {ex.Message}");
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
         }
     }
 }

@@ -24,6 +24,7 @@ public class User : IEntityBase
 
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
     public UserRole Role { get; set; } = UserRole.Staff;
 
     public string CreatedBy { get; set; } = string.Empty;

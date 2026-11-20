@@ -10,7 +10,6 @@ export function useSubscription() {
         queryKey: ['subscription-details'],
         queryFn: () => service.getSubscriptionDetails(),
         retry: 1,
-        enabled: !!localStorage.getItem('supplysmart_token'),
     });
 
     const updatePlanMutation = useMutation({
