@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CatalogService } from '../api/CatalogService';
 
-export function useCatalog(canReadAudit: boolean) {
+export function useCatalog() {
     const service = new CatalogService();
 
     const catalogQuery = useQuery({
@@ -10,17 +10,8 @@ export function useCatalog(canReadAudit: boolean) {
         retry: 1,
     });
 
-    const auditLogsQuery = useQuery({
-        queryKey: ['compliance-audit-logs'],
-        enabled: canReadAudit,
-        queryFn: () => service.getAuditLogs(),
-        retry: 1,
-    });
-
     return {
         catalogItems: catalogQuery.data ?? [],
         isLoadingCatalog: catalogQuery.isLoading,
-        auditLogs: auditLogsQuery.data ?? [],
-        isLoadingAudits: auditLogsQuery.isLoading,
     };
 }

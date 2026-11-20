@@ -1,21 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import AuditLedger from '../../components/AuditLedger'
 
 type IconName = 
   | 'dashboard' | 'map' | 'clipboard' | 'package' | 'chart' | 'settings' 
   | 'warehouse' | 'chevron' | 'help' | 'bell' | 'user' | 'sparkles' 
   | 'trend' | 'download' | 'sliders' | 'search'
-
-type Row = {
-  time: string
-  user: string
-  initials: string
-  action: 'Check-Out' | 'Restock'
-  location: string
-  item: string
-  detail: string
-}
 
 const Icon = ({ name, className = 'size-4', strokeWidth = 1.8 }: { name: IconName; className?: string; strokeWidth?: number }) => {
   const paths: Record<IconName, React.ReactNode> = {
@@ -44,13 +35,6 @@ const Icon = ({ name, className = 'size-4', strokeWidth = 1.8 }: { name: IconNam
   )
 }
 
-const ledgerRows: Row[] = [
-  { time: 'Today, 10:42 AM', user: 'Olivia Chen', initials: 'OC', action: 'Check-Out', location: 'North Warehouse', item: 'Acetaminophen 500mg', detail: '24 units' },
-  { time: 'Today, 9:15 AM', user: 'Marcus Johnson', initials: 'MJ', action: 'Restock', location: 'Main Facility', item: 'Nitrile Gloves · L', detail: '4 cases' },
-  { time: 'Yesterday, 4:37 PM', user: 'Aisha Patel', initials: 'AP', action: 'Check-Out', location: 'Research Lab', item: 'PBS Buffer Solution', detail: '12 units' },
-  { time: 'Yesterday, 1:08 PM', user: 'Daniel Kim', initials: 'DK', action: 'Restock', location: 'North Warehouse', item: 'Surgical Masks', detail: '8 cases' },
-]
-
 const chartValues = [38, 50, 42, 69, 57, 83, 62, 78, 68, 92, 74, 88]
 
 function StatCard({ icon, eyebrow, value, label, accent }: { icon: IconName; eyebrow: string; value: string; label: string; accent: string }) {
@@ -72,15 +56,6 @@ function StatCard({ icon, eyebrow, value, label, accent }: { icon: IconName; eye
 export default function ReportsPage({ canReadAudit }: { canReadAudit: boolean }) {
   const [range, setRange] = useState('Last 30 Days')
   const [location, setLocation] = useState('All Locations')
-  const [query, setQuery] = useState('')
-
-  const filteredRows = useMemo(() => 
-    ledgerRows.filter((row) => 
-      `${row.user} ${row.action} ${row.location} ${row.item}`.toLowerCase().includes(query.toLowerCase())
-    ), 
-    [query]
-  )
-
   return (
     <div className="mx-auto max-w-[1400px]">
       <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -122,10 +97,9 @@ export default function ReportsPage({ canReadAudit }: { canReadAudit: boolean })
         </div>
       </div> 
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2">
         <StatCard icon="sparkles" eyebrow="Estimated Money Saved" value="$12,450" label="Year to date" accent="bg-amber-50 text-amber-600" />
         <StatCard icon="trend" eyebrow="Waste Reduction Rate" value="94.2%" label="Safe consumption rate" accent="bg-emerald-50 text-emerald-600" />
-        {canReadAudit && <StatCard icon="clipboard" eyebrow="Active Audit Compliance" value="1,482" label="Immutable events logged" accent="bg-blue-50 text-blue-600" />}
       </section> 
 
       <section className="mt-6 grid gap-4 xl:grid-cols-[1.45fr_1fr]">
@@ -200,68 +174,7 @@ export default function ReportsPage({ canReadAudit }: { canReadAudit: boolean })
         </article>
       </section> 
 
-      {canReadAudit && <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-[14px] font-semibold text-slate-900">Compliance &amp; Activity Ledger</h2>
-            <p className="mt-1 text-[12px] text-slate-500">Immutable record of inventory activity</p>
-          </div>
-          <div className="relative">
-            <Icon name="search" className="absolute left-3 top-2.5 size-3.5 text-slate-400" />
-            <input 
-              value={query} 
-              onChange={(e) => setQuery(e.target.value)} 
-              placeholder="Search ledger..." 
-              className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[12px] outline-none placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 sm:w-[220px]" 
-            />
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-slate-50/80">
-              <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
-                <th className="px-5 py-3">Timestamp</th>
-                <th className="px-5 py-3">User</th>
-                <th className="px-5 py-3">Action Type</th>
-                <th className="px-5 py-3">Location</th>
-                <th className="px-5 py-3">Item Details</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredRows.map((row) => (
-                <tr key={`${row.time}-${row.user}`} className="group hover:bg-slate-50/70">
-                  <td className="whitespace-nowrap px-5 py-4 text-[12px] text-slate-500">{row.time}</td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex size-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600">{row.initials}</span>
-                      <span className="whitespace-nowrap text-[12px] font-medium text-slate-800">{row.user}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${row.action === 'Restock' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
-                      {row.action}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-[12px] text-slate-600">{row.location}</td>
-                  <td className="px-5 py-4">
-                    <p className="text-[12px] font-medium text-slate-800">{row.item}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">{row.detail}</p>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <button aria-label={`View ${row.item}`} className="text-[11px] font-semibold text-blue-600 opacity-0 transition group-hover:opacity-100">
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredRows.length === 0 && (
-            <p className="px-5 py-8 text-center text-sm text-slate-500">No ledger entries found.</p>
-          )}
-        </div>
-      </section>}
+      {canReadAudit && <div className="mt-6"><AuditLedger /></div>}
     </div>
   )
 }

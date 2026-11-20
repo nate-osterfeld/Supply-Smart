@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react'
+import AuditLedger from '../../components/AuditLedger'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useStorage } from '../../hooks/useStorage'
 
@@ -75,7 +76,7 @@ export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean })
 
   const [notice, setNotice] = useState('')
 
-  const { catalogItems = [], auditLogs = [], isLoadingCatalog, isLoadingAudits } = useCatalog(canReadAudit)
+  const { catalogItems = [], isLoadingCatalog } = useCatalog()
   const { updateItem, deleteItem } = useStorage()
 
   // Dynamically extract unique categories from loaded catalog items
@@ -195,10 +196,7 @@ export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean })
         <div className="mb-7 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">Catalog governance</h2>
-            <p className="mt-1 text-[13px] text-slate-500">Manage inventory records and maintain an immutable compliance history.</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="text-emerald-600"><Icon name="shield" size={16} /></span> All records compliant <span className="text-slate-300">·</span> Live DB synced
+            <p className="mt-1 text-[13px] text-slate-500">Manage inventory records for your clinic.</p>
           </div>
         </div>
 
@@ -209,7 +207,7 @@ export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean })
           </button>
           {canReadAudit && (
             <button onClick={() => setTab('audit')} className={`relative px-4 pb-3 text-[13px] font-semibold ${tab === 'audit' ? 'text-blue-700' : 'text-slate-500 hover:text-slate-800'}`}>
-              Immutable Audit Ledger
+              Audit Ledger
               {tab === 'audit' && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-blue-600" />}
             </button>
           )}
@@ -324,55 +322,7 @@ export default function CatalogPage({ canReadAudit }: { canReadAudit: boolean })
             </div>
           </section>
         ) : (
-          <section aria-label="Immutable Audit Ledger">
-            <div className="mb-4 flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs text-blue-800">
-              <span className="text-blue-600"><Icon name="shield" size={16} /></span>
-              <span><strong>Immutable audit events</strong> — Every catalog mutation is securely logged for compliance review.</span>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                <h3 className="text-sm font-semibold">Compliance activity ledger</h3>
-                <span className="inline-flex items-center gap-2 text-xs font-medium text-emerald-700"><Icon name="shield" size={14} />Chain verified</span>
-              </div>
-
-              <div className="overflow-x-auto">
-                {isLoadingAudits ? (
-                  <p className="p-8 text-xs text-slate-400">Loading audit ledger...</p>
-                ) : (
-                  <table className="w-full min-w-[850px] text-left">
-                    <thead className="bg-slate-50/80 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      <tr>
-                        {['Timestamp', 'User', 'Action type', 'Item details', ''].map((head) => (
-                          <th key={head} className="px-5 py-3 font-semibold">{head}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {auditLogs.map((log: any) => (
-                        <tr key={log.id} className="hover:bg-slate-50/70">
-                          <td className="px-5 py-4 text-xs tabular-nums text-slate-500">
-                            {new Date(log.timestamp).toLocaleString()}
-                          </td>
-                          <td className="px-5 py-4 font-medium text-xs text-slate-700">{log.userEmail}</td>
-                          <td className="px-5 py-4">
-                            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
-                              {log.actionType}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4">
-                            <div className="text-xs font-medium text-slate-700">{log.itemDetails}</div>
-                            <div className="mt-1 text-[11px] text-slate-400">{log.locationContext}</div>
-                          </td>
-                          <td className="px-5 py-4 text-right text-slate-300"><Icon name="arrow" size={15} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </section>
+          <AuditLedger />
         )}
       </main>
 
