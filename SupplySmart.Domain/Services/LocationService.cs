@@ -37,30 +37,27 @@ namespace SupplySmart.Domain.Services
 
         public async Task<IEnumerable<LocationDto>> GetLocationsAsync(int organizationId)
         {
-            var locations = await _context.Locations
-                .Where(l => l.OrganizationId == organizationId)
-                .Include(l => l.Rooms)
-                .ThenInclude(r => r.Containers)
-                .ToListAsync();
-
-            return locations.Select(l => new LocationDto
-            {
-                Id = l.Id,
-                Name = l.Name,
-                IsPrimary = l.IsPrimary,
-                Rooms = l.Rooms.Select(r => new RoomDto
+            return await _context.Locations
+                .Where(location => location.OrganizationId == organizationId)
+                .Select(location => new LocationDto
                 {
-                    Id = r.Id,
-                    Name = r.Name,
-                    Containers = r.Containers.Select(c => new ContainerDto
+                    Id = location.Id,
+                    Name = location.Name,
+                    IsPrimary = location.IsPrimary,
+                    Rooms = location.Rooms.Where(room => room.OrganizationId == organizationId).Select(room => new RoomDto
                     {
-                        Id = c.Id,
-                        Name = c.Name,
-                        Kind = c.Kind,
-                        ParentContainerId = c.ParentContainerId
+                        Id = room.Id,
+                        Name = room.Name,
+                        Containers = room.Containers.Where(bin => bin.OrganizationId == organizationId).Select(bin => new ContainerDto
+                        {
+                            Id = bin.Id,
+                            Name = bin.Name,
+                            Kind = bin.Kind,
+                            ParentContainerId = bin.ParentContainer != null && bin.ParentContainer.RoomId == bin.RoomId &&
+                                                bin.ParentContainer.OrganizationId == organizationId ? bin.ParentContainerId : null
+                        }).ToList()
                     }).ToList()
-                }).ToList()
-            });
+                }).ToListAsync();
         }
 
         public async Task<LocationDto> CreateLocationAsync(int organizationId, string name, bool isPrimary, string userEmail)
@@ -144,8 +141,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<IEnumerable<InventoryItemDto>> GetContainerItemsAsync(int organizationId, int? containerId)
         {
-            var query = _context.InventoryItems
-                .Where(i => i.OrganizationId == organizationId);
+            var query = _context.ItemsInClinicStorage(organizationId);
 
             if (containerId.HasValue)
             {
@@ -176,7 +172,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<object> GetContainerMetricsAsync(int organizationId, int? containerId)
         {
-            var query = _context.InventoryItems.Where(i => i.OrganizationId == organizationId);
+            var query = _context.ItemsInClinicStorage(organizationId);
 
             if (containerId.HasValue)
             {
@@ -364,10 +360,10 @@ namespace SupplySmart.Domain.Services
 
         public async Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail)
         {
-            var container = await _context.Containers
+            var container = await _context.ContainersInClinic(organizationId)
                 .Include(c => c.Room)
                 .ThenInclude(r => r.Location)
-                .FirstOrDefaultAsync(c => c.Id == containerId && c.Room.Location.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(c => c.Id == containerId);
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
@@ -429,15 +425,15 @@ namespace SupplySmart.Domain.Services
         public async Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail)
         {
             await using var transaction = await _context.Database.BeginTransactionAsync();
-            var item = await _context.InventoryItems
+            var item = await _context.ItemsInClinicStorage(organizationId)
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(i => i.Id == itemId);
 
-            var targetContainer = await _context.Containers
+            var targetContainer = await _context.ContainersInClinic(organizationId)
                 .Include(c => c.Room)
                 .ThenInclude(r => r.Location)
-                .FirstOrDefaultAsync(c => c.Id == targetContainerId && c.Room.Location.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(c => c.Id == targetContainerId);
 
             if (item == null || targetContainer == null) return false;
 
@@ -551,10 +547,10 @@ namespace SupplySmart.Domain.Services
 
         public async Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail)
         {
-            var item = await _context.InventoryItems
+            var item = await _context.ItemsInClinicStorage(organizationId)
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(i => i.Id == itemId);
 
             if (item == null)
             {
@@ -644,10 +640,10 @@ namespace SupplySmart.Domain.Services
 
         public async Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail)
         {
-            var item = await _context.InventoryItems
+            var item = await _context.ItemsInClinicStorage(organizationId)
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(i => i.Id == itemId);
 
             if (item == null) return false;
 

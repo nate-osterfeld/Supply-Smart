@@ -21,10 +21,10 @@ namespace SupplySmart.Domain.Services
 
         public async Task<IEnumerable<MasterCatalogItemDto>> GetMasterCatalogAsync(int organizationId)
         {
-            var items = await _context.InventoryItems
+            var items = await _context.ItemsInClinicStorage(organizationId)
+                .AsNoTracking()
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .Where(i => i.OrganizationId == organizationId)
                 .ToListAsync();
 
             var now = DateTime.UtcNow;
