@@ -20,35 +20,6 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
 
-      - name: Create appsettings.secrets File
-        run: |
-          echo "{
-            \"connectionstrings\": {
-              \"_msg\": \"add any necessary connection string names here, put the strings themselves in appsettings.secrets.json\",
-              \"supplysmart-db\": \"${{ secrets.AZURE_SQL_CONNECTION_STRING_PROD }}\"
-            },
-            \"JwtSettings\": {
-              \"Secret\": \"${{ secrets.JWT_SIGNING_KEY }}\"
-            },
-            \"FrontendUrl\": \"https://supplysmart-prod.blackgrass-3604f914.eastus2.azurecontainerapps.io\",
-            \"StripeSettings\": {
-              \"SecretKey\": \"${{ secrets.STRIPE_SECRET_KEY }}\",
-              \"WebhookSecret\": \"\",
-              \"StarterPriceId\": \"${{ secrets.STRIPE_STARTER_PRICE_ID }}\",
-              \"ProfessionalPriceId\": \"${{ secrets.STRIPE_PROFESSIONAL_PRICE_ID }}\",
-              \"EnterprisePriceId\": \"${{ secrets.STRIPE_ENTERPRISE_PRICE_ID }}\"
-            },
-            \"EmailSettings\": {
-              \"Host\": \"smtp.sendgrid.net\",
-              \"Port\": 587,
-              \"SenderEmail\": \"osterfnl@mail.uc.edu\",
-              \"SenderName\": \"SupplySmart\",
-              \"Username\": \"apikey\",
-              \"BaseUrl\": \"https://supplysmart-prod.blackgrass-3604f914.eastus2.azurecontainerapps.io\",
-              \"ApiKey\": \"${{ secrets.SENDGRID_API_KEY }}\"
-            }
-          }" > SupplySmart.Host/appsettings.secrets.json
-
       - name: Log in to ACR via Azure CLI
         run: |
           az acr login --name supplysmartacr
@@ -62,15 +33,20 @@ jobs:
           tags: supplysmartacr.azurecr.io/supplysmart-app:prod-${{ github.sha }}
 
       - name: Deploy to Azure Container App
-        uses: azure/container-apps-deploy-action@v2
-        with:
-          containerAppName: supplysmart-prod
-          resourceGroup: rg-supplysmart
-          imageToDeploy: supplysmartacr.azurecr.io/supplysmart-app:prod-${{ github.sha }}
-          acrName: supplysmartacr
-          acrUsername: supplysmartacr
-          acrPassword: ${{ secrets.ACR_PASSWORD }}
-          containerAppEnvironment: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
+        env:
+          APP_NAME: supplysmart-prod
+          IMAGE: supplysmartacr.azurecr.io/supplysmart-app:prod-${{ github.sha }}
+          FRONTEND_URL: https://supplysmart-prod.blackgrass-3604f914.eastus2.azurecontainerapps.io
+          CONTAINER_APP_ENVIRONMENT: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
+          DATABASE_CONNECTION: ${{ secrets.AZURE_SQL_CONNECTION_STRING_PROD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_STARTER_PRICE_ID: ${{ secrets.STRIPE_STARTER_PRICE_ID }}
+          STRIPE_PROFESSIONAL_PRICE_ID: ${{ secrets.STRIPE_PROFESSIONAL_PRICE_ID }}
+          STRIPE_ENTERPRISE_PRICE_ID: ${{ secrets.STRIPE_ENTERPRISE_PRICE_ID }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        run: bash .github/scripts/deploy-container-app.sh
 
       - name: Get Deployment URL
         id: get_url
