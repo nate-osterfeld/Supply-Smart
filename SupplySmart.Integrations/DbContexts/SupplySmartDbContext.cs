@@ -24,6 +24,7 @@ namespace SupplySmart.Integrations.DbContexts
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
         public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
+        public DbSet<InventorySnapshot> InventorySnapshots { get; set; }
 
         public SupplySmartDbContext(
             DbContextOptions<SupplySmartDbContext> options
@@ -246,6 +247,59 @@ namespace SupplySmart.Integrations.DbContexts
                       .WithMany(o => o.NotificationTemplates)
                       .HasForeignKey(e => e.OrganizationId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+
+            modelBuilder.Entity<InventorySnapshot>(entity =>
+            {
+                entity.ToTable("InventorySnapshots");
+
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.SnapshotDateUtc)
+                  .IsRequired();
+
+                entity.Property(e => e.QuantityOnHand)
+                  .IsRequired();
+
+                entity.Property(e => e.MinimumThresholdAtSnapshot)
+                  .IsRequired();
+
+                entity.Property(e => e.UnitCostAtSnapshot)
+                  .HasColumnType("decimal(18,2)")
+                  .IsRequired();
+
+                entity.Property(e => e.StatusAtSnapshot)
+                  .IsRequired()
+                  .HasMaxLength(50);
+
+                entity.HasOne(e => e.Organization)
+                  .WithMany()
+                  .HasForeignKey(e => e.OrganizationId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.InventoryItem)
+                  .WithMany()
+                  .HasForeignKey(e => e.InventoryItemId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.ContainerAtSnapshot)
+                  .WithMany()
+                  .HasForeignKey(e => e.ContainerIdAtSnapshot)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(e => e.OrganizationId);
+                entity.HasIndex(e => e.InventoryItemId);
+                entity.HasIndex(e => e.ContainerIdAtSnapshot);
+                entity.HasIndex(e => e.SnapshotDateUtc);
+
+                entity.HasIndex(e => new
+                {
+                    e.OrganizationId,
+                    e.InventoryItemId,
+                    e.SnapshotDateUtc
+                });
             });
         }
 
