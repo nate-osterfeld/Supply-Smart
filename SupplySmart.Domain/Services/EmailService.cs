@@ -24,23 +24,26 @@ public class EmailService : IEmailService
         _configuration = configuration;
     }
 
-    public async Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
+    internal SmtpClient CreateSmtpClient()
     {
         var host = _configuration["EmailSettings:Host"] ?? "localhost";
         var port = int.Parse(_configuration["EmailSettings:Port"] ?? "1025");
+        var apiKey = _configuration["EmailSettings:ApiKey"];
+        var isLoopback = string.Equals(host.TrimEnd('.'), "localhost", StringComparison.OrdinalIgnoreCase)
+            || (IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address));
+        var client = new SmtpClient(host, port) { EnableSsl = !isLoopback || !string.IsNullOrEmpty(apiKey) };
+        if (!string.IsNullOrEmpty(apiKey))
+            client.Credentials = new NetworkCredential(_configuration["EmailSettings:Username"] ?? "apikey", apiKey);
+        return client;
+    }
+
+    public async Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
+    {
         var senderEmail = _configuration["EmailSettings:SenderEmail"] ?? "no-reply@supplysmart.io";
         var senderName = _configuration["EmailSettings:SenderName"] ?? "SupplySmart";
         var baseUrl = _configuration["EmailSettings:BaseUrl"] ?? "http://localhost:5173";
-        var apiKey = _configuration["EmailSettings:ApiKey"];
-        var username = _configuration["EmailSettings:Username"] ?? "apikey";
 
-        using var client = new SmtpClient(host, port);
-
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            client.Credentials = new NetworkCredential(username, apiKey);
-            client.EnableSsl = true;
-        }
+        using var client = CreateSmtpClient();
 
         var loginUrl = WebUtility.HtmlEncode(baseUrl);
         var encodedName = WebUtility.HtmlEncode(fullName);
@@ -82,21 +85,11 @@ public class EmailService : IEmailService
 
         if (recipients.Count == 0) return;
 
-        var host = _configuration["EmailSettings:Host"] ?? "localhost";
-        var port = int.Parse(_configuration["EmailSettings:Port"] ?? "1025");
         var senderEmail = _configuration["EmailSettings:SenderEmail"] ?? "no-reply@supplysmart.io";
         var senderName = _configuration["EmailSettings:SenderName"] ?? "SupplySmart";
         var baseUrl = _configuration["EmailSettings:BaseUrl"] ?? "http://localhost:5173";
-        var apiKey = _configuration["EmailSettings:ApiKey"];
-        var username = _configuration["EmailSettings:Username"] ?? "apikey";
 
-        using var client = new SmtpClient(host, port);
-
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            client.Credentials = new NetworkCredential(username, apiKey);
-            client.EnableSsl = true;
-        }
+        using var client = CreateSmtpClient();
 
         var formattedHtmlContent = ConvertSimpleMarkdownToHtml(markdownBody);
 

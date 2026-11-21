@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Net.Mail;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +10,42 @@ namespace SupplySmart.Tests;
 
 public class EmailDeliveryTests
 {
+    [Theory]
+    [InlineData("relay.example.test", null, true)]
+    [InlineData("192.0.2.15", null, true)]
+    [InlineData("relay.example.test", "fixture-key", true)]
+    [InlineData("localhost", null, false)]
+    [InlineData("127.0.0.1", null, false)]
+    [InlineData("::1", null, false)]
+    [InlineData("localhost", "fixture-key", true)]
+    public void SmtpRequiresTlsForRemoteRelaysAndAuthenticatedConnections(string host, string? key, bool tls)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["EmailSettings:Host"] = host,
+            ["EmailSettings:ApiKey"] = key
+        }).Build();
+        using var client = new EmailService(configuration).CreateSmtpClient();
+        Assert.Equal(tls, client.EnableSsl);
+        Assert.Equal(key, (client.Credentials as NetworkCredential)?.Password);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RequiredTlsStopsBothMailPathsBeforeSendingToAPlaintextRelay(bool invitation)
+    {
+        var (message, recipients) = await CaptureMail(async service =>
+        {
+            await Assert.ThrowsAsync<SmtpException>(() => invitation
+                ? service.SendInviteEmailAsync("member@example.test", "Test member", "Synthetic invitation")
+                : service.SendAlertEmailAsync(["member@example.test"], "Test alert", "Test stock"));
+        }, "fixture-key");
+
+        Assert.Empty(recipients);
+        Assert.Empty(message);
+    }
+
     [Fact]
     public async Task InvitationNameCannotInjectALinkIntoTheSentEmail()
     {
@@ -62,7 +99,7 @@ public class EmailDeliveryTests
     }
 
     // Capture SMTP on loopback so tests can inspect the envelope and the delivered message.
-    private static async Task<(string Message, List<string> Recipients)> CaptureMail(Func<EmailService, Task> send)
+    private static async Task<(string Message, List<string> Recipients)> CaptureMail(Func<EmailService, Task> send, string? apiKey = null)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -73,6 +110,7 @@ public class EmailDeliveryTests
         {
             ["EmailSettings:Host"] = "127.0.0.1",
             ["EmailSettings:Port"] = port.ToString(),
+            ["EmailSettings:ApiKey"] = apiKey,
             ["EmailSettings:BaseUrl"] = "https://supplysmart.example.test/login?team=one&next=two"
         }).Build();
 
