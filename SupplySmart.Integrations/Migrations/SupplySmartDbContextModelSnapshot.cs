@@ -176,6 +176,58 @@ namespace SupplySmart.Integrations.Migrations
                     b.ToTable("InventoryItems", (string)null);
                 });
 
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventorySnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ContainerIdAtSnapshot")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ExpirationDateAtSnapshot")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinimumThresholdAtSnapshot")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityOnHand")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SnapshotDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StatusAtSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("UnitCostAtSnapshot")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerIdAtSnapshot");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("SnapshotDateUtc");
+
+                    b.HasIndex("OrganizationId", "InventoryItemId", "SnapshotDateUtc");
+
+                    b.ToTable("InventorySnapshots", (string)null);
+                });
+
             modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventoryTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -528,6 +580,33 @@ namespace SupplySmart.Integrations.Migrations
                         .IsRequired();
 
                     b.Navigation("Container");
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SupplySmart.Integrations.Models.Data.InventorySnapshot", b =>
+                {
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Container", "ContainerAtSnapshot")
+                        .WithMany()
+                        .HasForeignKey("ContainerIdAtSnapshot")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupplySmart.Integrations.Models.Data.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupplySmart.Integrations.Models.Data.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ContainerAtSnapshot");
+
+                    b.Navigation("InventoryItem");
 
                     b.Navigation("Organization");
                 });
