@@ -4,6 +4,7 @@ export interface InventoryItemDto {
     sku: string;
     lotNumber: string;
     expirationDate: string;
+    expirationTimestamp?: string | null;
     quantity: number;
     minimumThreshold: number;
     unitCost: number;

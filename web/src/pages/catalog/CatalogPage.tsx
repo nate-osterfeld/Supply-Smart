@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useStorage } from '../../hooks/useStorage'
 import type { MasterCatalogItemDto } from '../../models'
+import { expirationForSave, expirationInputValue } from '../../models/itemExpiration'
 
 type IconName = 'grid' | 'boxes' | 'file' | 'package' | 'clipboard' | 'settings' | 'chevron' | 'menu' | 'plus' | 'search' | 'sliders' | 'shield' | 'arrow' | 'more' | 'clock' | 'archive' | 'pencil'
 
@@ -113,14 +114,7 @@ export default function CatalogPage() {
     setItemCategory(item.category || 'General')
     setItemLot(item.lotNumber || 'LOT-DEFAULT')
     
-    let formattedDate = ''
-    if (item.expirationDate && item.expirationDate !== 'N/A') {
-      const parsedDate = new Date(item.expirationDate)
-      if (!isNaN(parsedDate.getTime())) {
-        formattedDate = parsedDate.toISOString().split('T')[0]
-      }
-    }
-    setItemExp(formattedDate)
+    setItemExp(expirationInputValue(item))
     
     setItemQty(item.quantity ?? 10)
     setItemMinThreshold(item.minimumThreshold ?? 2)
@@ -143,7 +137,7 @@ export default function CatalogPage() {
         minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
         unitCost: itemCost === '' ? 0 : Number(itemCost),
         type: Number(itemType),
-        expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
+        expirationDate: Number(itemType) === 0 ? expirationForSave(itemExp, editingItem?.expirationTimestamp) : null
       }
 
       await updateItem({ itemId: editingItem.id, dto: payload })

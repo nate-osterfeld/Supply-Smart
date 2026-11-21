@@ -45,6 +45,7 @@ namespace SupplySmart.Domain.Services
                     Quantity = i.Quantity,
                     Location = i.Container != null ? $"{i.Container.Room.Name} / {i.Container.Name}" : "Unassigned",
                     ExpirationDate = i.ExpirationDate.HasValue ? i.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
+                    ExpirationTimestamp = i.ExpirationDate,
                     Status = primaryStatus,
                     LotNumber = i.LotNumber,
                     MinimumThreshold = i.MinimumThreshold,

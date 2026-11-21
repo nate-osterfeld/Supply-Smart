@@ -18,6 +18,7 @@ import {
 import { useStorage } from '../../hooks/useStorage';
 import { useSubscription } from '../../hooks/useSubscription';
 import type { InventoryItemDto } from '../../models';
+import { expirationForSave, expirationInputValue } from '../../models/itemExpiration';
 
 type ViewLevel = 'locations' | 'rooms' | 'containers';
 type ModalType = 'none' | 'roomOrContainer' | 'editRoom' | 'editContainer' | 'item' | 'move';
@@ -126,14 +127,7 @@ export default function StoragePage() {
     setItemCategory(item.category || 'General');
     setItemLot(item.lotNumber || '');
     
-    let formattedDate = '';
-    if (item.expirationDate && item.expirationDate !== 'N/A') {
-      const parsedDate = new Date(item.expirationDate);
-      if (!isNaN(parsedDate.getTime())) {
-        formattedDate = parsedDate.toISOString().split('T')[0];
-      }
-    }
-    setItemExp(formattedDate);
+    setItemExp(expirationInputValue(item));
 
     setItemQty(item.quantity ?? 10);
     setItemMinThreshold(item.minimumThreshold ?? 2);
@@ -236,7 +230,7 @@ export default function StoragePage() {
         minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
         unitCost: itemCost === '' ? 0 : Number(itemCost),
         type: Number(itemType),
-        expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
+        expirationDate: Number(itemType) === 0 ? expirationForSave(itemExp, editingItem?.expirationTimestamp) : null
       };
 
       if (editingItem !== null) {
