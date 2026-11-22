@@ -19,11 +19,23 @@ export async function readBrowserSession(): Promise<AuthResponseDto | null> {
     return data.user;
 }
 
+// Only these application-owned fields need to survive signing in on a Stripe return.
+export function billingReturnSearch(search: string): string {
+    const params = new URLSearchParams(search);
+    if (params.get('tab') !== 'settings') return '';
+    const target = new URLSearchParams({ tab: 'settings' });
+    for (const key of ['billing_success', 'billing_canceled', 'session_id']) {
+        const value = params.get(key);
+        if (value) target.set(key, value);
+    }
+    return '?' + target.toString();
+}
+
 const changeKey = 'supplysmart_session_change';
-export function sessionChanged() {
+export function sessionChanged(search = '') {
     sessionStorage.removeItem('supplysmart_location_id');
     localStorage.setItem(changeKey, crypto.randomUUID());
-    window.location.replace('/');
+    window.location.replace('/' + billingReturnSearch(search));
 }
 
 export function initializeBrowserSession() {

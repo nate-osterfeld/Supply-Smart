@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthService } from './api/AuthService';
-import { sessionChanged } from './api/browserSession';
+import { billingReturnSearch, sessionChanged } from './api/browserSession';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { 
   LayoutDashboard, 
@@ -27,7 +27,12 @@ import ForecastPage from './pages/forecast/ForecastPage';
 export default function App() {
   const queryClient = useQueryClient();
   const user = useCurrentUser();
-  const [currentScreen, setCurrentScreen] = useState<string>('dashboard');
+  const billingReturn = billingReturnSearch(window.location.search);
+  const [currentScreen, setCurrentScreen] = useState<string>(() => user?.role === 'Admin' && billingReturn ? 'settings' : 'dashboard');
+  useEffect(() => {
+    if (user && user.role !== 'Admin' && billingReturn)
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+  }, [user, billingReturn]);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
 
@@ -197,7 +202,7 @@ export default function App() {
             <CatalogPage canReadAudit={canReadAudit} tab={currentScreen} onChangeTab={navigateTo} />
           )}
           {currentScreen === 'reports' && <ReportsPage canReadAudit={canReadAudit} />}
-          {currentScreen === 'settings' && <SettingsPage />}
+          {currentScreen === 'settings' && isAdmin && <SettingsPage />}
           {currentScreen === 'forecast' && <ForecastPage />}
         </main>
       </div>

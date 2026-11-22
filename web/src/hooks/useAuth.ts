@@ -11,7 +11,7 @@ export function useAuth() {
         // Queries use shared keys, so no previous account's data may survive a new session.
         await queryClient.cancelQueries();
         queryClient.clear();
-        sessionChanged();
+        sessionChanged(window.location.search);
     };
 
     const loginMutation = useMutation({

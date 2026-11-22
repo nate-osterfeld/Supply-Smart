@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { billingReturnSearch } from '../../api/browserSession';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useNavigate } from 'react-router-dom';
 import type { LocationDto } from '../../models';
@@ -43,13 +44,14 @@ export default function AuthPage() {
   const navigate = useNavigate();
   const { login, register } = useAuth();
   const user = useCurrentUser();
+  const workspaceUrl = '/dashboard' + billingReturnSearch(window.location.search);
 
   useEffect(() => {
     const locationId = Number(sessionStorage.getItem('supplysmart_location_id'));
     if (user?.locations.some(location => location.id === locationId)) {
-      navigate('/dashboard', { replace: true });
+      navigate(workspaceUrl, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, workspaceUrl]);
   
   const step = user ? 'locations' : 'auth';
   const [mode, setMode] = useState<'sign-in' | 'create'>('sign-in');
@@ -79,7 +81,7 @@ export default function AuthPage() {
   const handleLaunchWorkspace = () => {
     if (!selectedLocationId) return;
     sessionStorage.setItem('supplysmart_location_id', selectedLocationId.toString());
-    navigate('/dashboard');
+    navigate(workspaceUrl);
   };
 
   return (
