@@ -24,25 +24,31 @@ public class EmailService : IEmailService
         _configuration = configuration;
     }
 
-    public async Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
+    internal SmtpClient CreateSmtpClient()
     {
         var host = _configuration["EmailSettings:Host"] ?? "localhost";
         var port = int.Parse(_configuration["EmailSettings:Port"] ?? "1025");
+        var apiKey = _configuration["EmailSettings:ApiKey"];
+        var isLoopback = string.Equals(host.TrimEnd('.'), "localhost", StringComparison.OrdinalIgnoreCase)
+            || (IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address));
+        var client = new SmtpClient(host, port) { EnableSsl = !isLoopback || !string.IsNullOrEmpty(apiKey) };
+        if (!string.IsNullOrEmpty(apiKey))
+            client.Credentials = new NetworkCredential(_configuration["EmailSettings:Username"] ?? "apikey", apiKey);
+        return client;
+    }
+
+    public async Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
+    {
         var senderEmail = _configuration["EmailSettings:SenderEmail"] ?? "no-reply@supplysmart.io";
         var senderName = _configuration["EmailSettings:SenderName"] ?? "SupplySmart";
         var baseUrl = _configuration["EmailSettings:BaseUrl"] ?? "http://localhost:5173";
-        var apiKey = _configuration["EmailSettings:ApiKey"];
-        var username = _configuration["EmailSettings:Username"] ?? "apikey";
 
-        using var client = new SmtpClient(host, port);
+        using var client = CreateSmtpClient();
 
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            client.Credentials = new NetworkCredential(username, apiKey);
-            client.EnableSsl = true;
-        }
-
-        var loginUrl = $"{baseUrl}";
+        var loginUrl = WebUtility.HtmlEncode(baseUrl);
+        var encodedName = WebUtility.HtmlEncode(fullName);
+        var encodedEmail = WebUtility.HtmlEncode(toEmail);
+        var encodedPassword = WebUtility.HtmlEncode(tempPassword);
 
         var mailMessage = new MailMessage
         {
@@ -51,10 +57,10 @@ public class EmailService : IEmailService
             IsBodyHtml = true,
             Body = $@"
             <div style='font-family: Arial, sans-serif; color: #172033; line-height: 1.5;'>
-                <p>Hello {fullName},</p>
+                <p>Hello {encodedName},</p>
                 <p>You have been invited to join SupplySmart.</p>
-                <p>Your login email is: <strong>{toEmail}</strong></p>
-                <p>Your temporary password is: <strong>{tempPassword}</strong></p>
+                <p>Your login email is: <strong>{encodedEmail}</strong></p>
+                <p>Your temporary password is: <strong>{encodedPassword}</strong></p>
                 <p>Please log in and update your password by clicking the link below:</p>
                 <p style='margin: 24px 0;'>
                     <a href='{loginUrl}' style='background-color: #172033; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>
@@ -79,25 +85,15 @@ public class EmailService : IEmailService
 
         if (recipients.Count == 0) return;
 
-        var host = _configuration["EmailSettings:Host"] ?? "localhost";
-        var port = int.Parse(_configuration["EmailSettings:Port"] ?? "1025");
         var senderEmail = _configuration["EmailSettings:SenderEmail"] ?? "no-reply@supplysmart.io";
         var senderName = _configuration["EmailSettings:SenderName"] ?? "SupplySmart";
         var baseUrl = _configuration["EmailSettings:BaseUrl"] ?? "http://localhost:5173";
-        var apiKey = _configuration["EmailSettings:ApiKey"];
-        var username = _configuration["EmailSettings:Username"] ?? "apikey";
 
-        using var client = new SmtpClient(host, port);
-
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            client.Credentials = new NetworkCredential(username, apiKey);
-            client.EnableSsl = true;
-        }
+        using var client = CreateSmtpClient();
 
         var formattedHtmlContent = ConvertSimpleMarkdownToHtml(markdownBody);
 
-        var mailMessage = new MailMessage
+        using var mailMessage = new MailMessage
         {
             From = new MailAddress(senderEmail, senderName),
             Subject = subject,
@@ -117,7 +113,7 @@ public class EmailService : IEmailService
 
         foreach (var email in recipients)
         {
-            mailMessage.To.Add(email);
+            mailMessage.Bcc.Add(email);
         }
 
         await client.SendMailAsync(mailMessage);

@@ -16,12 +16,16 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import { useStorage } from '../../hooks/useStorage';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useSubscription } from '../../hooks/useSubscription';
 
 type ViewLevel = 'locations' | 'rooms' | 'containers';
 type ModalType = 'none' | 'roomOrContainer' | 'editRoom' | 'editContainer' | 'item' | 'move';
 
 export default function StoragePage() {
+  // Display controls for the signed-in role; the API enforces these permissions.
+  const role = useCurrentUser()?.role;
+  const canManageStorage = role === 'Admin' || role === 'Manager';
   const [viewLevel, setViewLevel] = useState<ViewLevel>('locations');
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
@@ -359,12 +363,16 @@ export default function StoragePage() {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button onClick={(e) => handleOpenEditRoomModal(room, e)} title="Edit Room" className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                <Pencil className="size-3.5" />
-              </button>
-              <button onClick={(e) => handleDeleteRoom(room.id, room.name, e)} title="Delete Room" className="p-1.5 text-slate-400 hover:text-red-600">
-                <Trash2 className="size-3.5" />
-              </button>
+              {canManageStorage && (
+                <>
+                  <button onClick={(e) => handleOpenEditRoomModal(room, e)} title="Edit Room" className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <Pencil className="size-3.5" />
+                  </button>
+                  <button onClick={(e) => handleDeleteRoom(room.id, room.name, e)} title="Delete Room" className="p-1.5 text-slate-400 hover:text-red-600">
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </>
+              )}
               <ChevronRight className="size-4 text-slate-400" />
             </div>
           </div>
@@ -392,12 +400,16 @@ export default function StoragePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={(e) => handleOpenEditContainerModal(container, e)} title="Edit Container" className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                      <Pencil className="size-3.5" />
-                    </button>
-                    <button onClick={(e) => handleDeleteContainer(container.id, container.name, e)} title="Delete Container" className="p-1.5 text-slate-400 hover:text-red-600">
-                      <Trash2 className="size-3.5" />
-                    </button>
+                    {canManageStorage && (
+                      <>
+                        <button onClick={(e) => handleOpenEditContainerModal(container, e)} title="Edit Container" className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                          <Pencil className="size-3.5" />
+                        </button>
+                        <button onClick={(e) => handleDeleteContainer(container.id, container.name, e)} title="Delete Container" className="p-1.5 text-slate-400 hover:text-red-600">
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </>
+                    )}
                     <ChevronRight className="size-4 text-slate-400" />
                   </div>
                 </div>
@@ -468,7 +480,7 @@ export default function StoragePage() {
             <p className="mt-1 text-sm text-slate-500">Navigate your physical inventory by location and storage compartment.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {viewLevel === 'locations' ? (
+            {canManageStorage && (viewLevel === 'locations' ? (
               <span className="text-xs text-slate-400 italic">Select a location to add rooms</span>
             ) : (
               <button 
@@ -477,7 +489,7 @@ export default function StoragePage() {
               >
                 <Plus className="size-3.5" /> {viewLevel === 'rooms' ? 'Add Room' : 'Add Storage Unit'}
               </button>
-            )}
+            ))}
           </div>
         </div>
 
@@ -635,7 +647,7 @@ export default function StoragePage() {
       </main>
 
       {/* Modal: Add Room or Container / Sub-container */}
-      {activeModal === 'roomOrContainer' && (
+      {canManageStorage && activeModal === 'roomOrContainer' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -701,7 +713,7 @@ export default function StoragePage() {
       )}
 
       {/* Modal: Edit Room */}
-      {activeModal === 'editRoom' && (
+      {canManageStorage && activeModal === 'editRoom' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Room Name</h3>
@@ -729,7 +741,7 @@ export default function StoragePage() {
       )}
 
       {/* Modal: Edit Container */}
-      {activeModal === 'editContainer' && (
+      {canManageStorage && activeModal === 'editContainer' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Storage Unit</h3>

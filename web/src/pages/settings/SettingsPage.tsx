@@ -528,20 +528,19 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
     const sessionId = params.get('session_id');
     const billingSuccess = params.get('billing_success');
     const billingCanceled = params.get('billing_canceled');
-    const targetPlan = params.get('plan');
 
     if (billingSuccess === 'true') {
       hasCheckedParams.current = true;
       if (sessionId) {
         verifySession(sessionId)
-          .then(() => {
-            addToast('Subscription Upgraded', `Successfully upgraded workspace to the ${targetPlan ?? 'new'} Plan!`);
+          .then(details => {
+            addToast('Current subscription', `Your workspace is on the ${details.planName} plan.`);
           })
           .catch(() => {
-            addToast('Verification Warning', 'Payment succeeded, please refresh if your plan quota has not updated yet.', 'error');
+            addToast('Verification unavailable', 'Refresh billing settings to check your current plan.', 'error');
           });
       } else {
-        addToast('Subscription Updated', `Successfully switched workspace to the ${targetPlan ?? 'new'} Plan.`);
+        addToast('Verification unavailable', 'The checkout reference is missing. Check your current plan below.', 'error');
       }
 
       params.delete('session_id');
@@ -697,7 +696,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
             <h2 className="text-[15px] font-bold text-slate-950">Select Subscription Tier</h2>
             <p className="mt-1 text-[11px] text-slate-500">
               {subscription.isStripeConfigured
-                ? 'Paid upgrades will redirect you to Stripe Checkout.'
+                ? 'Stripe handles paid subscriptions and confirms their cancellation.'
                 : 'Choose the plan that best fits your needs.'}
             </p>
 
@@ -750,9 +749,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
               >
                 {isUpdatingPlan
                   ? 'Processing...'
-                  : subscription.isStripeConfigured && selectedPlan !== 'Free'
-                  ? 'Continue to Stripe Checkout →'
-                  : 'Confirm Plan Change'}
+                  : 'Review plan change'}
               </button>
             </div>
           </div>

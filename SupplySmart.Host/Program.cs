@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SupplySmart.Domain.Services;
 using SupplySmart.Endpoints.Configuration;
+using SupplySmart.Endpoints.Security;
+using SupplySmart.Host.Authentication;
 using SupplySmart.Integrations.DbContexts;
 using SupplySmart.Integrations.Repositories;
 using System.Text;
@@ -33,6 +35,8 @@ builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<ICatalogService, CatalogService>();
 builder.Services.AddHttpContextAccessor(); // Required for automatic audit logging timestamps
 builder.Services.AddScoped<IForecastService, ForecastService>();
+builder.Services.AddScoped<CurrentUserJwtBearerEvents>();
+builder.Services.AddSingleton(new LoginAttemptLimiter(TimeProvider.System));
 
 // Configure JWT settings
 var jwtSecret = builder.Configuration["JwtSettings:Secret"] ?? throw new InvalidOperationException("JWT Secret is missing.");
@@ -45,6 +49,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.EventsType = typeof(CurrentUserJwtBearerEvents);
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
@@ -69,6 +74,7 @@ app.UseHttpsRedirection();
 // Enable Authentication & Authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
+app.Use((context, next) => BrowserSession.ProtectWrites(context, next, app.Configuration));
 
 // Enable serving static files from wwwroot (React frontend)
 app.UseDefaultFiles();
@@ -88,3 +94,5 @@ app.MapForecastEndpoints();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+// Expose the entry point to the isolated API integration tests.
+public partial class Program { }

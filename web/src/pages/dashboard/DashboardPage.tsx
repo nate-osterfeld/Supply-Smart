@@ -16,8 +16,8 @@ import { useDashboard } from '../../hooks/useDashboard'
 type ChangeType = 'positive' | 'warning' | 'critical' | 'neutral'
 type ActionType = 'checkout' | 'restock' | 'adjustment' | 'system'
 
-export default function DashboardPage({ onNavigate }: { onNavigate?: (screen: string) => void }) {
-  const { metrics, forecast, auditLogs, isLoadingMetrics, isLoadingForecast } = useDashboard();
+export default function DashboardPage({ onNavigate, canReadAudit }: { canReadAudit: boolean; onNavigate?: (screen: string) => void }) {
+  const { metrics, forecast, auditLogs, isLoadingMetrics, isLoadingForecast } = useDashboard(canReadAudit);
 
   return (
     <div className="p-8">
@@ -122,7 +122,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (screen: st
           </button>
         </div>
 
-        <section className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        {canReadAudit && <section className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-100 p-6 dark:border-slate-800">
             <h2 className="font-semibold text-slate-900 dark:text-white">Recent Activity</h2>
             <p className="mt-1 text-sm text-slate-500">Audit trail of recent inventory changes</p>
@@ -151,13 +151,13 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (screen: st
               </tbody>
             </table>
             <button 
-              onClick={() => onNavigate?.('catalog')}
+              onClick={() => onNavigate?.('audit')}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
             >
-              View Full Audit Log <ChevronRight className="size-4" />
+              View audit history <ChevronRight className="size-4" />
             </button>
           </div>
-        </section>
+        </section>}
       </div>
     </div>
   )

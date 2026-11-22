@@ -1,7 +1,9 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { billingReturnSearch } from '../../api/browserSession';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useNavigate } from 'react-router-dom';
-import type { AuthResponseDto, LocationDto } from '../../models';
+import type { LocationDto } from '../../models';
 
 type IconName = 'package' | 'sparkles' | 'eye' | 'eyeOff' | 'arrowRight' | 'lock' | 'mapPin' | 'check' | 'chevronRight' | 'shield';
 
@@ -41,17 +43,19 @@ function Icon({ name, className = 'size-5' }: IconProps) {
 export default function AuthPage() {
   const navigate = useNavigate();
   const { login, register } = useAuth();
+  const user = useCurrentUser();
+  const workspaceUrl = '/dashboard' + billingReturnSearch(window.location.search);
 
   useEffect(() => {
-    const token = localStorage.getItem('supplysmart_token');
-    const locationId = localStorage.getItem('supplysmart_location_id');
-    if (token && locationId) {
-      navigate('/dashboard', { replace: true });
+    const locationId = Number(sessionStorage.getItem('supplysmart_location_id'));
+    if (user?.locations.some(location => location.id === locationId)) {
+      navigate(workspaceUrl, { replace: true });
     }
-  }, [navigate]);
+  }, [user, navigate, workspaceUrl]);
   
-  const [step, setStep] = useState<'auth' | 'locations'>('auth');
+  const step = user ? 'locations' : 'auth';
   const [mode, setMode] = useState<'sign-in' | 'create'>('sign-in');
+  const formError = mode === 'sign-in' ? login.error : register.error;
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Form inputs
@@ -61,35 +65,23 @@ export default function AuthPage() {
   const [adminFullName, setAdminFullName] = useState<string>('');
 
   // Response session data
-  const [authResponse, setAuthResponse] = useState<AuthResponseDto | null>(null);
-  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(
+    () => (user?.locations.find(location => location.isPrimary) ?? user?.locations[0])?.id ?? null
+  );
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (mode === 'sign-in') {
-      login.mutate({ email, password }, {
-        onSuccess: (data: AuthResponseDto) => handleAuthSuccess(data),
-        onError: (err: Error) => alert(err.message)
-      });
+      login.mutate({ email, password });
     } else {
-      register.mutate({ organizationName: orgName, adminFullName, email, password }, {
-        onSuccess: (data: AuthResponseDto) => handleAuthSuccess(data),
-        onError: (err: Error) => alert(err.message)
-      });
+      register.mutate({ organizationName: orgName, adminFullName, email, password });
     }
-  };
-
-  const handleAuthSuccess = (data: AuthResponseDto) => {
-    setAuthResponse(data);
-    const primary = data.locations?.find((l: LocationDto) => l.isPrimary) || data.locations?.[0];
-    if (primary) setSelectedLocationId(primary.id);
-    setStep('locations');
   };
 
   const handleLaunchWorkspace = () => {
     if (!selectedLocationId) return;
-    localStorage.setItem('supplysmart_location_id', selectedLocationId.toString());
-    navigate('/dashboard');
+    sessionStorage.setItem('supplysmart_location_id', selectedLocationId.toString());
+    navigate(workspaceUrl);
   };
 
   return (
@@ -119,7 +111,7 @@ export default function AuthPage() {
                   <button 
                     key={item} 
                     type="button" 
-                    onClick={() => setMode(item)} 
+                    onClick={() => { login.reset(); register.reset(); setMode(item); }}
                     className={`rounded-lg px-3 py-2.5 text-xs font-semibold transition ${
                       mode === item ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-400' : 'text-slate-500'
                     }`}
@@ -177,6 +169,8 @@ export default function AuthPage() {
                     placeholder="Password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    minLength={mode === 'sign-in' ? undefined : 12}
+                    maxLength={1024}
                     required 
                   />
                   <button 
@@ -188,7 +182,9 @@ export default function AuthPage() {
                   </button>
                 </div>
 
-                <button 
+                {formError && <p role="alert" className="text-sm text-red-700">{formError.message}</p>}
+
+                <button
                   className="mt-1 flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50" 
                   type="submit"
                   disabled={login.isPending || register.isPending}
@@ -200,7 +196,7 @@ export default function AuthPage() {
           ) : (
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-3">
-                {authResponse?.locations?.map((loc: LocationDto) => (
+                {user?.locations.map((loc: LocationDto) => (
                   <button 
                     key={loc.id} 
                     type="button" 

@@ -33,9 +33,10 @@ namespace SupplySmart.Endpoints.Configuration
             app.MapGet("/api/audit-ledger/recent", DashboardEndpoints.GetRecentAuditLogs)
                 .WithName("GetRecentAuditLogs")
                 .WithDescription("Fetches the last 5 immutable log entries for the activity feed snapshot.")
-                .RequireAuthorization()
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
                 .Produces<IEnumerable<AuditLogEntryDto>>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status401Unauthorized)
+                .Produces(StatusCodes.Status403Forbidden)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }

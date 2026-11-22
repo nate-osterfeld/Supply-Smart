@@ -21,8 +21,10 @@ namespace SupplySmart.Endpoints.Configuration
 
             catalogEndpoints.MapGet("/audit-logs", CatalogEndpoints.GetAuditLogs)
                 .WithName("GetAuditLogs")
+                .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"))
                 .Produces<IEnumerable<AuditLogEntryDto>>(StatusCodes.Status200OK)
-                .Produces(StatusCodes.Status401Unauthorized);
+                .Produces(StatusCodes.Status401Unauthorized)
+                .Produces(StatusCodes.Status403Forbidden);
         }
     }
 }
