@@ -146,37 +146,17 @@ namespace SupplySmart.Domain.Services
                 await _itemRepo.AddAsync(item);
             }
 
-            // 6. Seed Initial Compliance Audit Log Entries
-            var auditLogs = new[]
+            await _auditLogRepo.AddAsync(new AuditLog
             {
-                new AuditLog
-                {
-                    OrganizationId = organizationId,
-                    Timestamp = DateTime.UtcNow.AddHours(-2),
-                    UserEmail = adminEmail,
-                    UserName = adminName,
-                    ActionType = "checkout",
-                    Action = "Check-Out",
-                    ItemDetails = "Maintenance Kit #SKU-4521",
-                    LocationName = "Main Facility"
-                },
-                new AuditLog
-                {
-                    OrganizationId = organizationId,
-                    Timestamp = DateTime.UtcNow.AddHours(-4),
-                    UserEmail = adminEmail,
-                    UserName = adminName,
-                    ActionType = "restock",
-                    Action = "Restock",
-                    ItemDetails = "Shipping Packaging Boxes (Medium) - Qty: 25",
-                    LocationName = "Main Facility"
-                }
-            };
-
-            foreach (var log in auditLogs)
-            {
-                await _auditLogRepo.AddAsync(log);
-            }
+                OrganizationId = organizationId,
+                Timestamp = DateTime.UtcNow,
+                UserEmail = adminEmail,
+                UserName = adminName,
+                ActionType = "Workspace initialized",
+                Action = "Workspace initialized",
+                ItemDetails = $"Created {sampleItems.Length} starter inventory items.",
+                LocationName = storageRoom.Name
+            });
         }
     }
 }

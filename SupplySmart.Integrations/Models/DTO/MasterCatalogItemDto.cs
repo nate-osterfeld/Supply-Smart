@@ -9,6 +9,7 @@ public class MasterCatalogItemDto
     public int Quantity { get; set; }
     public string Location { get; set; } = string.Empty;
     public string ExpirationDate { get; set; } = string.Empty;
+    public DateTime? ExpirationTimestamp { get; set; }
     public string Status { get; set; } = string.Empty;
 
     public string LotNumber { get; set; } = string.Empty;

@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useStorage } from '../../hooks/useStorage';
 import { useSubscription } from '../../hooks/useSubscription';
+import type { InventoryItemDto } from '../../models';
+import { expirationForSave, expirationInputValue } from '../../models/itemExpiration';
 
 type ViewLevel = 'locations' | 'rooms' | 'containers';
 type ModalType = 'none' | 'roomOrContainer' | 'editRoom' | 'editContainer' | 'item' | 'move';
@@ -60,7 +62,7 @@ export default function StoragePage() {
   const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
 
   // Item form state (used for both Add and Edit)
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editingItem, setEditingItem] = useState<InventoryItemDto | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemSku, setItemSku] = useState('');
   const [itemCategory, setItemCategory] = useState('');
@@ -104,7 +106,7 @@ export default function StoragePage() {
   const isItemQuotaReached = Boolean(subscription && subscription.maxItemsQuota !== 999999 && subscription.usedItemsCount >= subscription.maxItemsQuota);
 
   const handleOpenAddModal = () => {
-    setEditingItemId(null);
+    setEditingItem(null);
     setItemName('');
     setItemSku('');
     setItemCategory('');
@@ -118,25 +120,18 @@ export default function StoragePage() {
     setActiveModal('item');
   };
 
-  const handleOpenEditModal = (item: any) => {
-    setEditingItemId(item.id);
+  const handleOpenEditModal = (item: InventoryItemDto) => {
+    setEditingItem(item);
     setItemName(item.name || '');
     setItemSku(item.sku || '');
     setItemCategory(item.category || 'General');
     setItemLot(item.lotNumber || '');
     
-    let formattedDate = '';
-    if (item.expirationDate && item.expirationDate !== 'N/A') {
-      const parsedDate = new Date(item.expirationDate);
-      if (!isNaN(parsedDate.getTime())) {
-        formattedDate = parsedDate.toISOString().split('T')[0];
-      }
-    }
-    setItemExp(formattedDate);
+    setItemExp(expirationInputValue(item));
 
     setItemQty(item.quantity ?? 10);
-    setItemMinThreshold(item.minimumThreshold > 0 ? item.minimumThreshold : 2);
-    setItemCost(item.unitCost > 0 ? item.unitCost : 5.00);
+    setItemMinThreshold(item.minimumThreshold ?? 2);
+    setItemCost(item.unitCost ?? 5.00);
     setItemType(item.type ?? 0);
     setItemErrorMessage(null);
     setActiveModal('item');
@@ -235,17 +230,17 @@ export default function StoragePage() {
         minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
         unitCost: itemCost === '' ? 0 : Number(itemCost),
         type: Number(itemType),
-        expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
+        expirationDate: Number(itemType) === 0 ? expirationForSave(itemExp, editingItem?.expirationTimestamp) : null
       };
 
-      if (editingItemId !== null) {
-        await updateItem({ itemId: editingItemId, dto: payload });
+      if (editingItem !== null) {
+        await updateItem({ itemId: editingItem.id, dto: { ...payload, expectedQuantity: editingItem.quantity } });
       } else {
         await addItem({ containerId: selectedContainerId, dto: payload });
       }
 
       setActiveModal('none');
-      setEditingItemId(null);
+      setEditingItem(null);
       setItemName(''); setItemSku(''); setItemCategory(''); setItemLot(''); setItemExp(''); setItemQty(10); setItemCost(5.00); setItemMinThreshold(2);
       setItemErrorMessage(null);
     } catch (error: any) {
@@ -772,12 +767,12 @@ export default function StoragePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-2xs">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-              {editingItemId !== null ? 'Edit Inventory Item' : 'Add Inventory Item'}
+              {editingItem !== null ? 'Edit Inventory Item' : 'Add Inventory Item'}
             </h3>
             <p className="mt-1 text-xs text-slate-500">Assign stock and configure local par levels for this bin.</p>
             
             {/* Quota Warning Banner if item limit is reached */}
-            {editingItemId === null && isItemQuotaReached && (
+            {editingItem === null && isItemQuotaReached && (
               <div className="mt-4 rounded-xl bg-amber-50 p-3.5 text-xs font-medium text-amber-800 border border-amber-200 flex flex-col gap-2">
                 <p>You have reached your plan limit ({subscription?.usedItemsCount}/{subscription?.maxItemsQuota} items used on {subscription?.planName} Plan).</p>
                 <a href="/settings?tab=billing" className="font-semibold text-amber-900 underline hover:text-amber-950">
@@ -798,7 +793,7 @@ export default function StoragePage() {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Item Name</label>
                 <input 
                   value={itemName} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemName(e.target.value)} 
                   placeholder="e.g., Nitrile Gloves" 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
@@ -808,7 +803,7 @@ export default function StoragePage() {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Category</label>
                 <input 
                   value={itemCategory} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemCategory(e.target.value)} 
                   placeholder="e.g., Medical Supplies, PPE & Safety" 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
@@ -818,7 +813,7 @@ export default function StoragePage() {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">SKU</label>
                 <input 
                   value={itemSku} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemSku(e.target.value)} 
                   placeholder="GLV-LRG-01" 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
@@ -828,7 +823,7 @@ export default function StoragePage() {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Lot Number</label>
                 <input 
                   value={itemLot} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemLot(e.target.value)} 
                   placeholder="LOT-99210" 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
@@ -838,7 +833,7 @@ export default function StoragePage() {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Item Type</label>
                 <select 
                   value={itemType} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemType(Number(e.target.value))} 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white disabled:opacity-50"
                 >
@@ -851,7 +846,7 @@ export default function StoragePage() {
                 <input 
                   type="number" 
                   value={itemQty} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemQty(Number(e.target.value))} 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
                 />
@@ -862,7 +857,7 @@ export default function StoragePage() {
                   type="number" 
                   step="0.01" 
                   value={itemCost} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemCost(e.target.value === '' ? '' : Number(e.target.value))} 
                   placeholder="5.00" 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
@@ -873,7 +868,7 @@ export default function StoragePage() {
                 <input 
                   type="number" 
                   value={itemMinThreshold} 
-                  disabled={editingItemId === null && isItemQuotaReached}
+                  disabled={editingItem === null && isItemQuotaReached}
                   onChange={e => setItemMinThreshold(e.target.value === '' ? '' : Number(e.target.value))} 
                   placeholder="2" 
                   className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
@@ -885,7 +880,7 @@ export default function StoragePage() {
                   <input 
                     type="date" 
                     value={itemExp} 
-                    disabled={editingItemId === null && isItemQuotaReached}
+                    disabled={editingItem === null && isItemQuotaReached}
                     onChange={e => setItemExp(e.target.value)} 
                     className="mt-1 h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50" 
                   />
@@ -897,7 +892,7 @@ export default function StoragePage() {
               <button onClick={() => setActiveModal('none')} className="h-9 rounded-md border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</button>
               <button 
                 onClick={handleSaveItem} 
-                disabled={(editingItemId === null && isItemQuotaReached) || !itemName.trim()}
+                disabled={(editingItem === null && isItemQuotaReached) || !itemName.trim()}
                 className="h-9 rounded-md bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 Save Item

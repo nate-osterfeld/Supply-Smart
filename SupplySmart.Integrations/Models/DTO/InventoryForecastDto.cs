@@ -16,13 +16,13 @@ public class InventoryForecastDto
 
     public double AverageDailyUsage { get; set; }
 
-    public int PredictedDemand { get; set; }
+    public long PredictedDemand { get; set; }
 
-    public int ProjectedQuantity { get; set; }
+    public long ProjectedQuantity { get; set; }
 
     public string RiskLevel { get; set; } = string.Empty;
 
-    public int RecommendedOrderQuantity { get; set; }
+    public long RecommendedOrderQuantity { get; set; }
 
     public int HistoricalCheckoutCount { get; set; }
 

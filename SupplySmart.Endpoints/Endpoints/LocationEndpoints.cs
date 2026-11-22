@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SupplySmart.Domain.Services;
 using SupplySmart.Integrations.Models.DTO;
@@ -238,7 +239,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok<InventoryItemDto>, UnauthorizedHttpResult, ProblemHttpResult>> AddItem(
+        public static async Task<Results<Ok<InventoryItemDto>, BadRequest<object>, UnauthorizedHttpResult, ProblemHttpResult>> AddItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -254,6 +255,14 @@ namespace SupplySmart.Endpoints.Endpoints
                 var item = await locationService.AddItemAsync(orgId, containerId, dto, userEmail);
                 return TypedResults.Ok(item);
             }
+            catch (InventoryQuotaExceededException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error adding item.");
@@ -261,7 +270,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> MoveItem(
+        public static async Task<Results<Ok, BadRequest<object>, Conflict<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> MoveItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -277,6 +286,18 @@ namespace SupplySmart.Endpoints.Endpoints
                 var success = await locationService.MoveItemAsync(orgId, itemId, dto.TargetContainerId, dto.Quantity, dto.MinimumThreshold, userEmail);
                 return success ? TypedResults.Ok() : TypedResults.NotFound();
             }
+            catch (DbUpdateConcurrencyException)
+            {
+                return TypedResults.Conflict<object>(new { message = "Stock changed during this request. Reload the inventory before trying again." });
+            }
+            catch (InventoryQuotaExceededException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error relocating item.");
@@ -284,7 +305,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateItem(
+        public static async Task<Results<Ok, BadRequest<object>, Conflict<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> UpdateItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -300,6 +321,14 @@ namespace SupplySmart.Endpoints.Endpoints
                 var success = await locationService.UpdateItemAsync(orgId, itemId, dto, userEmail);
                 return success ? TypedResults.Ok() : TypedResults.NotFound();
             }
+            catch (ArgumentException ex)
+            {
+                return TypedResults.BadRequest<object>(new { message = ex.Message });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return TypedResults.Conflict<object>(new { message = "Stock changed during this request. Reload the inventory before trying again." });
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error updating item.");
@@ -307,7 +336,7 @@ namespace SupplySmart.Endpoints.Endpoints
             }
         }
 
-        public static async Task<Results<Ok, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> DeleteItem(
+        public static async Task<Results<Ok, Conflict<object>, NotFound, UnauthorizedHttpResult, ProblemHttpResult>> DeleteItem(
             ClaimsPrincipal claimsPrincipal,
             ILocationService locationService,
             ILogger<LocationEndpoints> logger,
@@ -321,6 +350,10 @@ namespace SupplySmart.Endpoints.Endpoints
 
                 var success = await locationService.DeleteItemAsync(orgId, itemId, userEmail);
                 return success ? TypedResults.Ok() : TypedResults.NotFound();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return TypedResults.Conflict<object>(new { message = "Stock changed during this request. Reload the inventory before trying again." });
             }
             catch (Exception ex)
             {

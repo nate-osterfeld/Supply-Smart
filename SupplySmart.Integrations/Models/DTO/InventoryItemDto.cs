@@ -7,6 +7,7 @@
         public string Sku { get; set; } = string.Empty;
         public string LotNumber { get; set; } = string.Empty;
         public string ExpirationDate { get; set; } = string.Empty;
+        public DateTime? ExpirationTimestamp { get; set; }
         public int Quantity { get; set; }
         public int MinimumThreshold { get; set; }
         public decimal UnitCost { get; set; }

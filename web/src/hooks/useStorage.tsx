@@ -123,10 +123,12 @@ export function useStorage(containerId?: number) {
     const updateItemMutation = useMutation({
         mutationFn: ({ itemId, dto }: { itemId: number; dto: UpdateItemDto }) => 
             service.updateItem(itemId, dto),
-        onSuccess: () => {
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ['container-items'] });
-            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
             queryClient.invalidateQueries({ queryKey: ['master-catalog'] });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['locations-hierarchy'] });
             queryClient.invalidateQueries({ queryKey: ['compliance-audit-logs'] });
             queryClient.invalidateQueries({ queryKey: ['subscription-details'] });
         },

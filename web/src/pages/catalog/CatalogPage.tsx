@@ -1,6 +1,8 @@
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useStorage } from '../../hooks/useStorage'
+import type { MasterCatalogItemDto } from '../../models'
+import { expirationForSave, expirationInputValue } from '../../models/itemExpiration'
 
 type IconName = 'grid' | 'boxes' | 'file' | 'package' | 'clipboard' | 'settings' | 'chevron' | 'menu' | 'plus' | 'search' | 'sliders' | 'shield' | 'arrow' | 'more' | 'clock' | 'archive' | 'pencil'
 
@@ -36,6 +38,7 @@ function Status({ value }: { value: string }) {
         return 'bg-amber-50 text-amber-700 ring-amber-600/25';
       case 'Expiring Soon':
         return 'bg-orange-50 text-orange-700 ring-orange-500/30';
+      case 'Out of Stock':
       case 'Expired':
         return 'bg-red-50 text-red-700 font-semibold ring-red-600/40';
       default:
@@ -62,7 +65,7 @@ export default function CatalogPage() {
 
   // Edit Item Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingItemId, setEditingItemId] = useState<number | null>(null)
+  const [editingItem, setEditingItem] = useState<MasterCatalogItemDto | null>(null)
   const [itemName, setItemName] = useState('')
   const [itemSku, setItemSku] = useState('')
   const [itemLot, setItemLot] = useState('')
@@ -104,21 +107,14 @@ export default function CatalogPage() {
     )
   }
 
-  const handleOpenEditModal = (item: any) => {
-    setEditingItemId(item.id)
+  const handleOpenEditModal = (item: MasterCatalogItemDto) => {
+    setEditingItem(item)
     setItemName(item.name || '')
     setItemSku(item.sku || '')
     setItemCategory(item.category || 'General')
     setItemLot(item.lotNumber || 'LOT-DEFAULT')
     
-    let formattedDate = ''
-    if (item.expirationDate && item.expirationDate !== 'N/A') {
-      const parsedDate = new Date(item.expirationDate)
-      if (!isNaN(parsedDate.getTime())) {
-        formattedDate = parsedDate.toISOString().split('T')[0]
-      }
-    }
-    setItemExp(formattedDate)
+    setItemExp(expirationInputValue(item))
     
     setItemQty(item.quantity ?? 10)
     setItemMinThreshold(item.minimumThreshold ?? 2)
@@ -128,7 +124,7 @@ export default function CatalogPage() {
   }
 
   const handleSaveEditedItem = async () => {
-    if (editingItemId === null || !itemName.trim()) return
+    if (editingItem === null || !itemName.trim()) return
     try {
       const payload = {
         name: itemName,
@@ -136,21 +132,20 @@ export default function CatalogPage() {
         category: itemCategory || 'General',
         lotNumber: itemLot || 'LOT-DEFAULT',
         quantity: Number(itemQty),
+        expectedQuantity: editingItem.quantity,
         globalThreshold: 50,
         minimumThreshold: itemMinThreshold === '' ? 5 : Number(itemMinThreshold),
         unitCost: itemCost === '' ? 0 : Number(itemCost),
         type: Number(itemType),
-        expirationDate: Number(itemType) === 0 && itemExp ? new Date(itemExp).toISOString() : null
+        expirationDate: Number(itemType) === 0 ? expirationForSave(itemExp, editingItem?.expirationTimestamp) : null
       }
 
-      if (updateItem) {
-        await updateItem({ itemId: editingItemId, dto: payload })
-      }
+      await updateItem({ itemId: editingItem.id, dto: payload })
       setIsEditModalOpen(false)
       notify(`Successfully updated ${itemName}`)
     } catch (error) {
       console.error('Failed to update item:', error)
-      notify('Failed to update item')
+      notify(error instanceof Error ? error.message : 'Failed to update item')
     }
   }
 
@@ -251,7 +246,7 @@ export default function CatalogPage() {
                         <button onClick={() => setSelectedStatuses([])} className="text-[11px] text-blue-600 hover:underline">Clear</button>
                       )}
                     </div>
-                    {['In Stock', 'Low Stock', 'Expiring Soon', 'Expired'].map((statusOption) => {
+                    {['In Stock', 'Low Stock', 'Out of Stock', 'Expiring Soon', 'Expired'].map((statusOption) => {
                       const checked = selectedStatuses.includes(statusOption)
                       return (
                         <label key={statusOption} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">

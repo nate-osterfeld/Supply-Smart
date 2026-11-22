@@ -6,6 +6,7 @@ export interface MasterCatalogItemDto {
     quantity: number;
     location: string;
     expirationDate: string;
+    expirationTimestamp?: string | null;
     status: string;
     lotNumber?: string;
     minimumThreshold?: number;

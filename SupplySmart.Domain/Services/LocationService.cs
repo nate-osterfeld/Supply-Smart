@@ -37,30 +37,27 @@ namespace SupplySmart.Domain.Services
 
         public async Task<IEnumerable<LocationDto>> GetLocationsAsync(int organizationId)
         {
-            var locations = await _context.Locations
-                .Where(l => l.OrganizationId == organizationId)
-                .Include(l => l.Rooms)
-                .ThenInclude(r => r.Containers)
-                .ToListAsync();
-
-            return locations.Select(l => new LocationDto
-            {
-                Id = l.Id,
-                Name = l.Name,
-                IsPrimary = l.IsPrimary,
-                Rooms = l.Rooms.Select(r => new RoomDto
+            return await _context.Locations
+                .Where(location => location.OrganizationId == organizationId)
+                .Select(location => new LocationDto
                 {
-                    Id = r.Id,
-                    Name = r.Name,
-                    Containers = r.Containers.Select(c => new ContainerDto
+                    Id = location.Id,
+                    Name = location.Name,
+                    IsPrimary = location.IsPrimary,
+                    Rooms = location.Rooms.Where(room => room.OrganizationId == organizationId).Select(room => new RoomDto
                     {
-                        Id = c.Id,
-                        Name = c.Name,
-                        Kind = c.Kind,
-                        ParentContainerId = c.ParentContainerId
+                        Id = room.Id,
+                        Name = room.Name,
+                        Containers = room.Containers.Where(bin => bin.OrganizationId == organizationId).Select(bin => new ContainerDto
+                        {
+                            Id = bin.Id,
+                            Name = bin.Name,
+                            Kind = bin.Kind,
+                            ParentContainerId = bin.ParentContainer != null && bin.ParentContainer.RoomId == bin.RoomId &&
+                                                bin.ParentContainer.OrganizationId == organizationId ? bin.ParentContainerId : null
+                        }).ToList()
                     }).ToList()
-                }).ToList()
-            });
+                }).ToListAsync();
         }
 
         public async Task<LocationDto> CreateLocationAsync(int organizationId, string name, bool isPrimary, string userEmail)
@@ -144,8 +141,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<IEnumerable<InventoryItemDto>> GetContainerItemsAsync(int organizationId, int? containerId)
         {
-            var query = _context.InventoryItems
-                .Where(i => i.OrganizationId == organizationId);
+            var query = _context.ItemsInClinicStorage(organizationId);
 
             if (containerId.HasValue)
             {
@@ -154,36 +150,9 @@ namespace SupplySmart.Domain.Services
 
             var items = await query.ToListAsync();
 
+            var now = DateTime.UtcNow;
             return items.Select(i =>
             {
-                var statuses = new List<string>();
-
-                if (i.Quantity == 0)
-                {
-                    statuses.Add("Out of Stock");
-                }
-                else if (i.Quantity <= i.MinimumThreshold)
-                {
-                    statuses.Add("Low Stock");
-                }
-
-                if (i.ExpirationDate.HasValue)
-                {
-                    if (i.ExpirationDate.Value <= DateTime.UtcNow)
-                    {
-                        statuses.Add("Expired");
-                    }
-                    else if (i.ExpirationDate.Value <= DateTime.UtcNow.AddDays(30))
-                    {
-                        statuses.Add("Expiring Soon");
-                    }
-                }
-
-                if (!statuses.Any())
-                {
-                    statuses.Add("Safe");
-                }
-
                 return new InventoryItemDto
                 {
                     Id = i.Id,
@@ -191,10 +160,11 @@ namespace SupplySmart.Domain.Services
                     Sku = i.Sku,
                     LotNumber = i.LotNumber,
                     ExpirationDate = i.ExpirationDate.HasValue ? i.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
+                    ExpirationTimestamp = i.ExpirationDate,
                     Quantity = i.Quantity,
                     MinimumThreshold = i.MinimumThreshold,
                     UnitCost = i.UnitCost,
-                    Statuses = statuses,
+                    Statuses = StockStatus.ForItem(i, now),
                     Category = !string.IsNullOrEmpty(i.Category) ? i.Category : "General",
                     Type = (int)i.Type
                 };
@@ -203,7 +173,7 @@ namespace SupplySmart.Domain.Services
 
         public async Task<object> GetContainerMetricsAsync(int organizationId, int? containerId)
         {
-            var query = _context.InventoryItems.Where(i => i.OrganizationId == organizationId);
+            var query = _context.ItemsInClinicStorage(organizationId);
 
             if (containerId.HasValue)
             {
@@ -391,30 +361,17 @@ namespace SupplySmart.Domain.Services
 
         public async Task<InventoryItemDto> AddItemAsync(int organizationId, int containerId, CreateItemDto dto, string userEmail)
         {
-            var container = await _context.Containers
+            var container = await _context.ContainersInClinic(organizationId)
                 .Include(c => c.Room)
                 .ThenInclude(r => r.Location)
-                .FirstOrDefaultAsync(c => c.Id == containerId && c.Room.Location.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(c => c.Id == containerId);
 
             if (container == null) throw new UnauthorizedAccessException("Invalid container scope.");
 
-            var org = await _context.Organizations
-                .AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == organizationId);
-
-            if (org == null) throw new InvalidOperationException("Organization not found.");
-
-            var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
-            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
-
-            var currentItemsCount = await _context.InventoryItems
-                .CountAsync(i => i.OrganizationId == organizationId);
-
-            if (currentItemsCount >= maxItemsQuota)
-            {
-                throw new InvalidOperationException(
-                    $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
-            }
+            ValidateItemValues(dto.Quantity, dto.MinimumThreshold, dto.UnitCost, dto.Type);
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var organization = await GetOrganizationForItemAllocationAsync(organizationId);
+            await EnsureItemQuotaAvailableAsync(organization);
 
             var item = new InventoryItem
             {
@@ -445,6 +402,8 @@ namespace SupplySmart.Domain.Services
 
             await _context.SaveChangesAsync();
 
+            await transaction.CommitAsync();
+
             // Check if newly added item starts out below threshold or out of stock
             await _notificationService.CheckAndTriggerItemStockAlertAsync(organizationId, dto.Quantity + 1, item);
 
@@ -455,10 +414,11 @@ namespace SupplySmart.Domain.Services
                 Sku = item.Sku,
                 LotNumber = item.LotNumber,
                 ExpirationDate = item.ExpirationDate.HasValue ? item.ExpirationDate.Value.ToString("MMM dd, yyyy") : "N/A",
+                ExpirationTimestamp = item.ExpirationDate,
                 Quantity = item.Quantity,
                 MinimumThreshold = item.MinimumThreshold,
                 UnitCost = item.UnitCost,
-                Statuses = new List<string> { "Safe" },
+                Statuses = StockStatus.ForItem(item, DateTime.UtcNow),
                 Category = item.Category,
                 Type = (int)item.Type
             };
@@ -466,17 +426,28 @@ namespace SupplySmart.Domain.Services
 
         public async Task<bool> MoveItemAsync(int organizationId, int itemId, int targetContainerId, int? quantityToMove, int? minimumThreshold, string userEmail)
         {
-            var item = await _context.InventoryItems
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var item = await _context.ItemsInClinicStorage(organizationId)
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(i => i.Id == itemId);
 
-            var targetContainer = await _context.Containers
+            var targetContainer = await _context.ContainersInClinic(organizationId)
                 .Include(c => c.Room)
                 .ThenInclude(r => r.Location)
-                .FirstOrDefaultAsync(c => c.Id == targetContainerId && c.Room.Location.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(c => c.Id == targetContainerId);
 
             if (item == null || targetContainer == null) return false;
+
+            if (item.ContainerId == targetContainer.Id)
+            {
+                throw new ArgumentException("Select a different destination bin.");
+            }
+
+            if (minimumThreshold < 0)
+            {
+                throw new ArgumentException("Minimum threshold cannot be negative.");
+            }
 
             int oldQty = item.Quantity;
             int moveQty = quantityToMove ?? item.Quantity;
@@ -506,14 +477,29 @@ namespace SupplySmart.Domain.Services
             }
             else
             {
-                item.Quantity -= moveQty;
-
+                var organization = await GetOrganizationForItemAllocationAsync(organizationId);
                 var existingTargetItem = await _context.InventoryItems
                     .FirstOrDefaultAsync(i => i.OrganizationId == organizationId
                         && i.ContainerId == targetContainerId
                         && i.Sku == item.Sku
                         && i.LotNumber == item.LotNumber
-                        && i.ExpirationDate == item.ExpirationDate);
+                        && i.ExpirationDate == item.ExpirationDate
+                        && i.Name == item.Name
+                        && i.Category == item.Category
+                        && i.Type == item.Type
+                        && i.UnitCost == item.UnitCost);
+
+                if (existingTargetItem != null && (long)existingTargetItem.Quantity + moveQty > int.MaxValue)
+                {
+                    throw new ArgumentException("The transfer would exceed the destination's maximum quantity.");
+                }
+
+                if (existingTargetItem is null)
+                {
+                    await EnsureItemQuotaAvailableAsync(organization);
+                }
+
+                item.Quantity -= moveQty;
 
                 if (existingTargetItem != null)
                 {
@@ -527,6 +513,8 @@ namespace SupplySmart.Domain.Services
                         ContainerId = targetContainerId,
                         Name = item.Name,
                         Sku = item.Sku,
+                        Category = item.Category,
+                        Type = item.Type,
                         LotNumber = item.LotNumber,
                         ExpirationDate = item.ExpirationDate,
                         Quantity = moveQty,
@@ -548,6 +536,7 @@ namespace SupplySmart.Domain.Services
             }
 
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             // Trigger stock alert if partial transfer leaves the source bin running low
             if (moveQty < oldQty)
@@ -560,18 +549,24 @@ namespace SupplySmart.Domain.Services
 
         public async Task<bool> UpdateItemAsync(int organizationId, int itemId, UpdateItemDto dto, string userEmail)
         {
-            var item = await _context.InventoryItems
+            var item = await _context.ItemsInClinicStorage(organizationId)
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(i => i.Id == itemId);
 
             if (item == null)
             {
                 return false;
             }
 
+            ValidateItemValues(dto.Quantity, dto.MinimumThreshold, dto.UnitCost, dto.Type);
+
             // Save quantity before change for forecasting and alerts
             var quantityBefore = item.Quantity;
+            if (dto.ExpectedQuantity.HasValue && dto.ExpectedQuantity.Value != quantityBefore)
+            {
+                throw new DbUpdateConcurrencyException("The quantity has changed since the item was opened.");
+            }
             var quantityAfter = dto.Quantity;
             var quantityChange = quantityAfter - quantityBefore;
 
@@ -598,6 +593,8 @@ namespace SupplySmart.Domain.Services
             item.MinimumThreshold = dto.MinimumThreshold;
             item.UnitCost = dto.UnitCost;
             item.Category = !string.IsNullOrEmpty(dto.Category) ? dto.Category : "General";
+            // Check the original quantity even when every submitted field matches our snapshot.
+            _context.Entry(item).Property(i => i.Quantity).IsModified = true;
 
             var locationContext = item.Container != null
                 ? $"{item.Container.Room.Name} › {item.Container.Name}"
@@ -645,10 +642,10 @@ namespace SupplySmart.Domain.Services
 
         public async Task<bool> DeleteItemAsync(int organizationId, int itemId, string userEmail)
         {
-            var item = await _context.InventoryItems
+            var item = await _context.ItemsInClinicStorage(organizationId)
                 .Include(i => i.Container)
                 .ThenInclude(c => c.Room)
-                .FirstOrDefaultAsync(i => i.Id == itemId && i.OrganizationId == organizationId);
+                .FirstOrDefaultAsync(i => i.Id == itemId);
 
             if (item == null) return false;
 
@@ -668,5 +665,42 @@ namespace SupplySmart.Domain.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        private static void ValidateItemValues(int quantity, int minimumThreshold, decimal unitCost, int type)
+        {
+            if (quantity < 0)
+                throw new ArgumentException("Quantity cannot be negative.");
+            if (minimumThreshold < 0)
+                throw new ArgumentException("Minimum threshold cannot be negative.");
+            // Match the decimal(18,2) column so an invalid price never reaches persistence.
+            if (unitCost < 0 || unitCost > 9999999999999999.99m)
+                throw new ArgumentException("Unit cost must be between 0 and 9999999999999999.99.");
+            if (!Enum.IsDefined((ItemType)type))
+                throw new ArgumentException("Item type must be Consumable (0) or Reusable (1).");
+        }
+
+        private Task<Organization> GetOrganizationForItemAllocationAsync(int organizationId)
+        {
+            // Hold one update lock per clinic until the stock row and its audit entry commit.
+            // SQLite already takes a writer lock when this transaction starts.
+            var organizations = _context.Database.IsSqlServer()
+                ? _context.Organizations.FromSql($"SELECT * FROM [Organizations] WITH (UPDLOCK) WHERE [Id] = {organizationId}")
+                : _context.Organizations.Where(o => o.Id == organizationId);
+            return organizations.AsNoTracking().SingleAsync();
+        }
+
+        private async Task EnsureItemQuotaAvailableAsync(Organization org)
+        {
+            var maxItemsQuota = org.MaxItemsQuota > 0 ? org.MaxItemsQuota : 50;
+            var planName = string.IsNullOrEmpty(org.SubscriptionPlan) ? "Free" : org.SubscriptionPlan;
+            var currentItemsCount = await _context.InventoryItems.CountAsync(i => i.OrganizationId == org.Id);
+            if (currentItemsCount >= maxItemsQuota)
+            {
+                throw new InventoryQuotaExceededException(
+                    $"You have reached the maximum inventory item limit ({maxItemsQuota} items) for your current {planName} Plan. Please upgrade your subscription in Workspace Settings to add more items.");
+            }
+        }
     }
+
+    public sealed class InventoryQuotaExceededException(string message) : InvalidOperationException(message) { }
 }
