@@ -198,7 +198,7 @@ internal sealed class StripeBillingFixture : IDisposable
         string customer = "cus_first", long created = 1000) => new
     {
         id, @object = "subscription", customer, status, created,
-        items = new { @object = "list", data = new[] { new { quantity = 1, price = new { id = price, @object = "price" } } } }
+        items = new { @object = "list", data = new[] { new { id = "si_fixture", quantity = 1, price = new { id = price, @object = "price" } } } }
     };
 
     private sealed class LocalStripe : HttpMessageHandler

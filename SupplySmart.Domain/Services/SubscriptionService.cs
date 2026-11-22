@@ -119,17 +119,21 @@ namespace SupplySmart.Domain.Services
                 throw new InvalidOperationException("Paid subscriptions are unavailable until Stripe billing is configured.");
             }
 
-            if (normalizedPlan == "Free")
+            var linked = await GetOpenSubscriptionAsync(org);
+            if (linked is not null)
             {
-                var linked = await GetOpenSubscriptionAsync(org);
-                if (linked is not null)
-                {
-                    return await ConfirmPlanChangeAsync(linked.CustomerId, new Stripe.BillingPortal.SessionFlowDataOptions
+                var flow = normalizedPlan == "Free"
+                    ? new Stripe.BillingPortal.SessionFlowDataOptions
                     {
                         Type = "subscription_cancel",
                         SubscriptionCancel = new() { Subscription = linked.Id }
-                    });
-                }
+                    }
+                    : PaidChangeFlow(linked, priceId!);
+                return await ConfirmPlanChangeAsync(linked.CustomerId, flow);
+            }
+
+            if (normalizedPlan == "Free")
+            {
                 ApplyLocalPlanUpdate(org, normalizedPlan, targetRoomsQuota, targetItemsQuota, userEmail);
                 await _context.SaveChangesAsync();
 
@@ -206,6 +210,24 @@ namespace SupplySmart.Domain.Services
             if (linked.Id != org.StripeSubscriptionId || linked.CustomerId != org.StripeCustomerId)
                 throw new InvalidOperationException("The billing profile does not match the linked subscription.");
             return linked.Status is "canceled" or "incomplete_expired" ? null : linked;
+        }
+
+        private Stripe.BillingPortal.SessionFlowDataOptions PaidChangeFlow(Stripe.Subscription linked, string priceId)
+        {
+            if (linked.Items is not { HasMore: false, Data: [var item] } || string.IsNullOrEmpty(item.Id) || PaidPlanFor(linked) is null)
+                throw new InvalidOperationException("This subscription cannot be changed here. Open the billing portal to review it.");
+            if (item.Price.Id == priceId)
+                return new() { Type = "subscription_update", SubscriptionUpdate = new() { Subscription = linked.Id } };
+
+            return new()
+            {
+                Type = "subscription_update_confirm",
+                SubscriptionUpdateConfirm = new()
+                {
+                    Subscription = linked.Id,
+                    Items = [new() { Id = item.Id, Price = priceId, Quantity = item.Quantity }]
+                }
+            };
         }
 
         private async Task<SubscriptionCheckoutResponseDto> ConfirmPlanChangeAsync(string customerId, Stripe.BillingPortal.SessionFlowDataOptions flow)
