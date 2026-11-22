@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: prod
-      url: ${{ steps.get_url.outputs.app_url }}
+      url: ${{ vars.FRONTEND_URL || steps.get_url.outputs.app_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
         env:
           APP_NAME: supplysmart-prod
           IMAGE: supplysmartacr.azurecr.io/supplysmart-app:prod-${{ github.sha }}
-          FRONTEND_URL: https://supplysmart-prod.blackgrass-3604f914.eastus2.azurecontainerapps.io
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
           CONTAINER_APP_ENVIRONMENT: ${{ vars.CONTAINER_APP_ENVIRONMENT }}
           DATABASE_CONNECTION: ${{ secrets.AZURE_SQL_CONNECTION_STRING_PROD }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
@@ -51,6 +51,7 @@ jobs:
 
       - name: Get Deployment URL
         id: get_url
+        if: ${{ !vars.FRONTEND_URL }}
         run: |
           FQDN=$(az containerapp show \
             --name supplysmart-prod \
