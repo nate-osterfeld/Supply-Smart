@@ -88,20 +88,22 @@ public class StripeCheckoutTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ALinkedReceiptRefreshesPaidPricingAndRespectsALocalDowngrade(bool switchedToFree)
+    public async Task ALinkedReceiptRefreshesPricingAndRespectsALegacyLocalDowngrade(bool switchedToFree)
     {
         using var billing = new StripeBillingFixture();
         await billing.LinkClinic();
         using var admin = await billing.App.SignIn(1);
         if (switchedToFree)
         {
-            using var free = await admin.PostAsJsonAsync("/api/settings/subscription/checkout", new { targetPlan = "Free" });
-            free.EnsureSuccessStatusCode();
+            // Older releases switched the local plan while the Stripe subscription was still linked.
+            await billing.App.ReadDb(db => db.Organizations.Where(o => o.Id == 1).ExecuteUpdateAsync(updates => updates
+                .SetProperty(o => o.SubscriptionPlan, "Free").SetProperty(o => o.MaxRoomsQuota, 2)
+                .SetProperty(o => o.MaxItemsQuota, 50)));
         }
         billing.StripeResource(Path, Checkout(StripeBillingFixture.Subscription("sub_current", price: "price_starter")));
         using var verified = await admin.PostAsJsonAsync("/api/settings/subscription/verify-session", new { sessionId = SessionId });
         verified.EnsureSuccessStatusCode();
-        await AssertPlan(billing, switchedToFree ? "Free" : "Starter", 1, "sub_current");
+        await AssertPlan(billing, switchedToFree ? "Free" : "Starter", switchedToFree ? 0 : 1, "sub_current");
     }
 
     [Theory]

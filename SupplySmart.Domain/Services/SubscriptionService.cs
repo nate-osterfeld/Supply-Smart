@@ -121,6 +121,15 @@ namespace SupplySmart.Domain.Services
 
             if (normalizedPlan == "Free")
             {
+                var linked = await GetOpenSubscriptionAsync(org);
+                if (linked is not null)
+                {
+                    return await ConfirmPlanChangeAsync(linked.CustomerId, new Stripe.BillingPortal.SessionFlowDataOptions
+                    {
+                        Type = "subscription_cancel",
+                        SubscriptionCancel = new() { Subscription = linked.Id }
+                    });
+                }
                 ApplyLocalPlanUpdate(org, normalizedPlan, targetRoomsQuota, targetItemsQuota, userEmail);
                 await _context.SaveChangesAsync();
 
@@ -184,19 +193,43 @@ namespace SupplySmart.Domain.Services
                 throw new InvalidOperationException("No active billing profile or customer ID found for this organization.");
             }
 
-            var options = new Stripe.BillingPortal.SessionCreateOptions
-            {
-                Customer = org.StripeCustomerId,
-                ReturnUrl = $"{_frontendUrl}/dashboard?tab=settings"
-            };
+            return new SubscriptionPortalResponseDto { PortalUrl = await CreatePortalUrlAsync(org.StripeCustomerId) };
+        }
 
-            var service = new Stripe.BillingPortal.SessionService(_stripe);
-            var portalSession = await service.CreateAsync(options);
+        private async Task<Stripe.Subscription?> GetOpenSubscriptionAsync(Organization org)
+        {
+            if (string.IsNullOrWhiteSpace(org.StripeSubscriptionId)) return null;
+            if (_stripe is null || string.IsNullOrWhiteSpace(org.StripeCustomerId))
+                throw new InvalidOperationException("Billing is unavailable for the linked subscription.");
 
-            return new SubscriptionPortalResponseDto
+            var linked = await new Stripe.SubscriptionService(_stripe).GetAsync(org.StripeSubscriptionId);
+            if (linked.Id != org.StripeSubscriptionId || linked.CustomerId != org.StripeCustomerId)
+                throw new InvalidOperationException("The billing profile does not match the linked subscription.");
+            return linked.Status is "canceled" or "incomplete_expired" ? null : linked;
+        }
+
+        private async Task<SubscriptionCheckoutResponseDto> ConfirmPlanChangeAsync(string customerId, Stripe.BillingPortal.SessionFlowDataOptions flow)
+        {
+            return new SubscriptionCheckoutResponseDto
             {
-                PortalUrl = portalSession.Url
+                UpdatedImmediately = false,
+                CheckoutUrl = await CreatePortalUrlAsync(customerId, flow),
+                Message = "Review the subscription change in Stripe."
             };
+        }
+
+        private async Task<string> CreatePortalUrlAsync(string customerId, Stripe.BillingPortal.SessionFlowDataOptions? flow = null)
+        {
+            var returnUrl = $"{_frontendUrl}/dashboard?tab=settings";
+            if (flow is not null)
+                flow.AfterCompletion = new() { Type = "redirect", Redirect = new() { ReturnUrl = returnUrl } };
+            var session = await new Stripe.BillingPortal.SessionService(_stripe).CreateAsync(new Stripe.BillingPortal.SessionCreateOptions
+            {
+                Customer = customerId,
+                ReturnUrl = returnUrl,
+                FlowData = flow
+            });
+            return session.Url;
         }
 
         public async Task<SubscriptionDetailsDto> VerifyAndSyncSessionAsync(int organizationId, string sessionId)

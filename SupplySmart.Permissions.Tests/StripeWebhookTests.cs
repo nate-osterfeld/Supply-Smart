@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -187,6 +189,8 @@ internal sealed class StripeBillingFixture : IDisposable
         return await db.SaveChangesAsync();
     });
 
+    public IReadOnlyList<(string Path, Dictionary<string, StringValues> Form)> Posts => transport.Posts;
+
     public void StripeResource(string path, object resource) => transport.Resources["/v1/" + path] = resource;
     public Func<Task>? BeforeStripeReply { set => transport.BeforeReply = value; }
 
@@ -200,11 +204,15 @@ internal sealed class StripeBillingFixture : IDisposable
     private sealed class LocalStripe : HttpMessageHandler
     {
         public Dictionary<string, object> Resources { get; } = [];
+        public List<(string Path, Dictionary<string, StringValues> Form)> Posts { get; } = [];
         public Func<Task>? BeforeReply { get; set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            Assert.Equal(HttpMethod.Get, request.Method);
             var uri = request.RequestUri!;
+            if (request.Method == HttpMethod.Post)
+                Posts.Add((uri.AbsolutePath, QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(ct))));
+            else
+                Assert.Equal(HttpMethod.Get, request.Method);
             if (uri.AbsolutePath.StartsWith("/v1/checkout/sessions/"))
                 Assert.Contains("subscription", Uri.UnescapeDataString(uri.Query));
             Assert.True(Resources.TryGetValue(uri.AbsolutePath, out var result), $"Unexpected Stripe read: {uri.AbsolutePath}");

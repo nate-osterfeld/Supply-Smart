@@ -696,7 +696,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
             <h2 className="text-[15px] font-bold text-slate-950">Select Subscription Tier</h2>
             <p className="mt-1 text-[11px] text-slate-500">
               {subscription.isStripeConfigured
-                ? 'Paid upgrades will redirect you to Stripe Checkout.'
+                ? 'Stripe handles paid subscriptions and confirms their cancellation.'
                 : 'Choose the plan that best fits your needs.'}
             </p>
 
@@ -749,9 +749,7 @@ function BillingPanel({ addToast }: { addToast: (title: string, message: string,
               >
                 {isUpdatingPlan
                   ? 'Processing...'
-                  : subscription.isStripeConfigured && selectedPlan !== 'Free'
-                  ? 'Continue to Stripe Checkout →'
-                  : 'Confirm Plan Change'}
+                  : 'Review plan change'}
               </button>
             </div>
           </div>
