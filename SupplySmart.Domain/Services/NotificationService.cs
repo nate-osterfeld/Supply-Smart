@@ -82,11 +82,11 @@ public class NotificationService : INotificationService
         if (recipients.Count == 0) return 0;
 
         // Grab a real item from the org if available, or fall back to realistic sample data
-        var sampleItem = await _context.InventoryItems
+        var sampleItem = await _context.ItemsInClinicStorage(organizationId).AsNoTracking()
             .Include(i => i.Container)
                 .ThenInclude(c => c!.Room)
                     .ThenInclude(r => r!.Location)
-            .FirstOrDefaultAsync(i => i.OrganizationId == organizationId);
+            .FirstOrDefaultAsync();
 
         var itemName = sampleItem?.Name ?? "Nitrile Exam Gloves (Box of 100)";
         var supplyRoom = sampleItem?.Container?.Room?.Name ?? "Sterilization & Prep Room A";
@@ -128,20 +128,18 @@ public class NotificationService : INotificationService
 
             if (triggeredEvent == null) return;
 
+            var itemWithLocation = await _context.ItemsInClinicStorage(organizationId).AsNoTracking()
+                .Include(i => i.Container).ThenInclude(c => c.Room).ThenInclude(r => r.Location)
+                .FirstOrDefaultAsync(i => i.Id == updatedItem.Id);
+            if (itemWithLocation == null) return;
+
             var templates = await EnsureDefaultTemplatesAsync(organizationId);
             var template = templates.FirstOrDefault(t => t.TriggerType == triggeredEvent);
             if (template == null) return;
 
-            // Load spatial hierarchy names if not already loaded
-            var itemWithLocation = await _context.InventoryItems
-                .Include(i => i.Container)
-                    .ThenInclude(c => c!.Room)
-                        .ThenInclude(r => r!.Location)
-                .FirstOrDefaultAsync(i => i.Id == updatedItem.Id && i.OrganizationId == organizationId);
-
-            var itemName = itemWithLocation?.Name ?? updatedItem.Name;
-            var supplyRoom = itemWithLocation?.Container?.Room?.Name ?? "Supply Room";
-            var locationName = itemWithLocation?.Container?.Room?.Location?.Name ?? "Main Hub";
+            var itemName = itemWithLocation.Name;
+            var supplyRoom = itemWithLocation.Container.Room.Name;
+            var locationName = itemWithLocation.Container.Room.Location.Name;
 
             var extraEmails = SplitEmails(template.AdditionalRecipients);
             var recipients = await ResolveRecipientsAsync(organizationId, extraEmails);

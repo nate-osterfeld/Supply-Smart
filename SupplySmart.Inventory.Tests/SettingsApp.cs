@@ -93,7 +93,13 @@ public sealed class SettingsApp(Action<IServiceCollection>? configureServices = 
 public sealed class FakeEmail : IEmailService
 {
     public List<string> Recipients { get; } = [];
-    public Task SendAlertEmailAsync(IEnumerable<string> toEmails, string subject, string markdownBody) { Recipients.AddRange(toEmails); return Task.CompletedTask; }
+    public List<string> AlertBodies { get; } = [];
+    public Task SendAlertEmailAsync(IEnumerable<string> toEmails, string subject, string markdownBody)
+    {
+        Recipients.AddRange(toEmails);
+        AlertBodies.Add(markdownBody);
+        return Task.CompletedTask;
+    }
     public bool Fail { get; set; }
     public List<(string Email, string Password)> Invitations { get; } = [];
     public Task SendInviteEmailAsync(string toEmail, string fullName, string tempPassword)
