@@ -141,7 +141,6 @@ export default function App() {
                 sessionChanged();
               } catch {
                 setSignOutError('Sign-out failed. Please try again.');
-              } finally {
                 setIsSigningOut(false);
               }
             }}
